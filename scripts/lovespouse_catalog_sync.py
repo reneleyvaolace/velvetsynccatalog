@@ -1,4 +1,4 @@
-# Versión: 1.3.0
+# Versión: 1.4.0
 import csv
 import json
 import logging
@@ -67,12 +67,20 @@ def fetch_full_data(row):
             if data and isinstance(data, dict) and data.get('response', {}).get('result'):
                 api = data.get('data', {})
                 
-                # Campos básicos para el CSV
+                # Campos básicos y técnicos para el CSV
                 row['DB_Id'] = api.get('Id', '')
                 row['RealTitle'] = api.get('Title', '')
                 row['Pics'] = api.get('Pics', '')
                 row['CateId'] = api.get('CateId', '')
                 row['Qrcode'] = api.get('Qrcode', '')
+                
+                # Nuevos campos técnicos basados en la UI
+                row['Wireless'] = api.get('Wireless', '2.4g').upper()
+                row['FactoryId'] = api.get('FactoryId', '')
+                row['IsEncrypt'] = 'Seguro' if api.get('IsEncrypt') == 1 else 'No'
+                row['IsPrecise'] = '0-255' if api.get('IsPrecise') == 1 else 'Estándar'
+                row['BroadcastPrefix'] = api.get('BroadcastPrefix', '')
+                row['BleName'] = api.get('BleName', '')
                 
                 func_obj = api.get('FuncObj', {})
                 funcs_enabled = [k for k, v in func_obj.items() if v]
@@ -105,30 +113,35 @@ def fetch_full_data(row):
                     "motors": [translate_name(f.get('Name', '')) for f in raw_funcs if f.get('Name')]
                 })
                 
-                logging.info(f"Éxito al obtener data para Barcode: {barcode}")
+                logging.info(f"Éxito al obtener data técnica para Barcode: {barcode}")
             else:
-                row.update({'DB_Id': '', 'RealTitle': '', 'Pics': '', 'CateId': '', 'Qrcode': '', 'SupportedFuncs': ''})
+                row.update({'DB_Id': '', 'RealTitle': '', 'Pics': '', 'CateId': '', 'Qrcode': '', 'SupportedFuncs': '', 'Wireless': '', 'FactoryId': '', 'IsEncrypt': '', 'IsPrecise': '', 'BroadcastPrefix': '', 'BleName': ''})
         else:
-            row.update({'DB_Id': '', 'RealTitle': '', 'Pics': '', 'CateId': '', 'Qrcode': '', 'SupportedFuncs': ''})
+            row.update({'DB_Id': '', 'RealTitle': '', 'Pics': '', 'CateId': '', 'Qrcode': '', 'SupportedFuncs': '', 'Wireless': '', 'FactoryId': '', 'IsEncrypt': '', 'IsPrecise': '', 'BroadcastPrefix': '', 'BleName': ''})
     except Exception as e:
-        row.update({'DB_Id': '', 'RealTitle': '', 'Pics': '', 'CateId': '', 'Qrcode': '', 'SupportedFuncs': ''})
+        row.update({'DB_Id': '', 'RealTitle': '', 'Pics': '', 'CateId': '', 'Qrcode': '', 'SupportedFuncs': '', 'Wireless': '', 'FactoryId': '', 'IsEncrypt': '', 'IsPrecise': '', 'BroadcastPrefix': '', 'BleName': ''})
         logging.error(f"Error en {barcode}: {e}")
     
     return row, device_data
 
 def main():
-    logging.info("Iniciando sincronización profunda con traducción (v1.3.0)...")
+    logging.info("Iniciando sincronización técnica profunda (v1.4.0)...")
     ensure_tmp_dir()
     
     with open(INPUT_CSV, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         rows = list(reader)
-        fieldnames = reader.fieldnames + ['DB_Id', 'RealTitle', 'Pics', 'CateId', 'Qrcode', 'SupportedFuncs']
+        # Extendemos campos del CSV con la nueva metadata técnica
+        new_fields = ['DB_Id', 'RealTitle', 'Pics', 'CateId', 'Qrcode', 'SupportedFuncs', 'Wireless', 'FactoryId', 'IsEncrypt', 'IsPrecise', 'BroadcastPrefix', 'BleName']
+        fieldnames = reader.fieldnames
+        for nf in new_fields:
+            if nf not in fieldnames:
+                fieldnames.append(nf)
 
     enriched_csv_rows = []
     json_data_list = []
     
-    print(f"Sincronizando {len(rows)} productos con LoveSpouse API...")
+    print(f"Sincronizando {len(rows)} productos con LoveSpouse API (Modo Técnico)...")
     with ThreadPoolExecutor(max_workers=10) as executor:
         results = list(executor.map(fetch_full_data, rows))
         
@@ -146,8 +159,8 @@ def main():
     with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
         json.dump(json_data_list, f, indent=2, ensure_ascii=False)
 
-    print(f"Catálogo completo traducido generado en {OUTPUT_CSV} y {OUTPUT_JSON}")
-    logging.info("Proceso terminado exitosamente.")
+    print(f"Catálogo técnico completo generado en {OUTPUT_CSV} y {OUTPUT_JSON}")
+    logging.info("Proceso técnico terminado exitosamente.")
 
 if __name__ == "__main__":
     main()

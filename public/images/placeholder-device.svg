@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">
+  <rect fill="#1a1a1a" width="400" height="400"/>
+  
+  <!-- Icon -->
+  <g transform="translate(200, 200)">
+    <!-- Device outline -->
+    <rect x="-80" y="-100" width="160" height="200" rx="20" fill="none" stroke="#333" stroke-width="4"/>
+    
+    <!-- Screen -->
+    <rect x="-60" y="-80" width="120" height="140" rx="10" fill="#333"/>
+    
+    <!-- Antenna -->
+    <line x1="0" y1="-100" x2="0" y2="-130" stroke="#333" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="0" cy="-130" r="8" fill="#333"/>
+    
+    <!-- Signal waves -->
+    <path d="M -30 -130 Q -50 -150 -30 -170" stroke="#E43681" stroke-width="3" fill="none" opacity="0.6"/>
+    <path d="M 0 -130 Q 0 -160 0 -190" stroke="#E43681" stroke-width="3" fill="none" opacity="0.6"/>
+    <path d="M 30 -130 Q 50 -150 30 -170" stroke="#E43681" stroke-width="3" fill="none" opacity="0.6"/>
+    
+    <!-- Text -->
+    <text x="0" y="20" text-anchor="middle" fill="#666" font-family="Arial, sans-serif" font-size="16" font-weight="bold">
+      Velvet Sync
+    </text>
+    <text x="0" y="45" text-anchor="middle" fill="#444" font-family="Arial, sans-serif" font-size="12">
+      Sin Imagen
+    </text>
+  </g>
+  
+  <!-- Border glow -->
+  <rect x="5" y="5" width="390" height="390" rx="25" fill="none" stroke="#E43681" stroke-width="2" opacity="0.3"/>
+</svg>

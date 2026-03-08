@@ -506,12 +506,14 @@ function DeviceCatalog() {
                   )}
 
                   <img
-                    src={device.pics || stealthIcon}
+                    src={device.pics}
                     alt={device.title}
                     className="device-image"
                     onError={(e) => {
-                      e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect fill="%231a1a1a" width="200" height="200"/><text fill="%23333" x="50%" y="50%" text-anchor="middle" dy=".3em">Sin Imagen</text></svg>';
+                      // Fallback a placeholder local si falla la URL externa
+                      e.target.src = '/images/placeholder-device.svg';
                     }}
+                    loading="lazy"
                   />
                   <div className="device-overlay">
                     <span className="device-id-badge">#{device.id}</span>
@@ -597,12 +599,10 @@ function DeviceCatalog() {
                     className={`connect-btn ${deviceAIReady ? 'ai-ready' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (deviceAIReady) {
-                        startAIDemo(device);
-                      } else {
-                        setSelectedDevice(device);
-                      }
+                      // Todos los dispositivos abren el modal, los AI Ready también pueden usar Demo IA
+                      setSelectedDevice(device);
                     }}
+                    title={deviceAIReady ? 'Dispositivo compatible con IA - Click para Demo' : 'Vincular dispositivo'}
                   >
                     <span className="btn-icon">{deviceAIReady ? '🤖' : '📡'}</span>
                     {deviceAIReady ? 'Demo IA' : 'Vincular en Velvet Sync'}
@@ -812,6 +812,59 @@ function DeviceCatalog() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                )}
+
+                {/* Documentation Links */}
+                <div className="device-modal-docs">
+                  <h3>📚 Documentación</h3>
+                  <div className="docs-links">
+                    {selectedDevice.manualUrl && (
+                      <a
+                        href={selectedDevice.manualUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="doc-link manual"
+                      >
+                        📖 Manual de Usuario
+                      </a>
+                    )}
+                    {selectedDevice.techSheetUrl && (
+                      <a
+                        href={selectedDevice.techSheetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="doc-link tech-sheet"
+                      >
+                        📋 Ficha Técnica
+                      </a>
+                    )}
+                    {selectedDevice.qrcode && (
+                      <a
+                        href={selectedDevice.qrcode}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="doc-link qr-code"
+                      >
+                        📱 Ver QR Code
+                      </a>
+                    )}
+                  </div>
+                  <p className="docs-note">
+                    ℹ️ La documentación se carga desde el servidor del fabricante
+                  </p>
+                </div>
+
+                {/* AI Demo Button (if compatible) */}
+                {isAIReady(selectedDevice.id) && (
+                  <div className="device-modal-ai">
+                    <button className="ai-demo-btn" onClick={() => startAIDemo(selectedDevice)}>
+                      <span className="btn-icon">🤖</span>
+                      Iniciar Demo IA
+                    </button>
+                    <p className="ai-note">
+                      ✨ Este dispositivo es compatible con Velvet Sync AI Impulse
+                    </p>
                   </div>
                 )}
               </div>

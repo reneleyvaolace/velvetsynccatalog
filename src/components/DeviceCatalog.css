@@ -1053,6 +1053,111 @@
   font-family: 'Courier New', monospace;
 }
 
+/* Documentation Links */
+.device-modal-docs {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: var(--velvet-dark);
+  border-radius: 12px;
+  border: 1px solid var(--velvet-border);
+}
+
+.device-modal-docs h3 {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  color: var(--velvet-cyan);
+  font-weight: 600;
+}
+
+.docs-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.doc-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--velvet-card);
+  border-radius: 8px;
+  color: var(--text-bone);
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border: 1px solid var(--velvet-border);
+}
+
+.doc-link:hover {
+  background: var(--velvet-card);
+  transform: translateX(5px);
+}
+
+.doc-link.manual:hover {
+  border-color: var(--velvet-magenta);
+  color: var(--velvet-magenta);
+}
+
+.doc-link.tech-sheet:hover {
+  border-color: var(--velvet-cyan);
+  color: var(--velvet-cyan);
+}
+
+.doc-link.qr-code:hover {
+  border-color: var(--velvet-magenta);
+  color: var(--velvet-magenta);
+}
+
+.docs-note {
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* AI Demo Section in Modal */
+.device-modal-ai {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(228, 54, 129, 0.1) 0%, rgba(236, 72, 153, 0.05) 100%);
+  border-radius: 12px;
+  border: 2px solid var(--velvet-magenta);
+  text-align: center;
+}
+
+.ai-demo-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: var(--gradient-magenta);
+  border: none;
+  border-radius: 12px;
+  color: var(--text-white);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px var(--velvet-magenta-glow);
+}
+
+.ai-demo-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px var(--velvet-magenta-glow);
+}
+
+.ai-demo-btn .btn-icon {
+  font-size: 1.3rem;
+}
+
+.ai-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+  color: var(--text-bone);
+  font-style: italic;
+}
+
 /* ============================================
    LOADING & EMPTY STATES
    ============================================ */

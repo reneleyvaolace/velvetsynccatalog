@@ -23,6 +23,7 @@ Establecer un flujo de trabajo para la vinculación y sincronización del proyec
 7. Subir los cambios al remoto.
 
 ### Restricciones / Historial de Aprendizaje
+- **2026-03-08:** Vinculación inicial con el repositorio `velvetsynccatalog.git` completada con éxito.
 - **Nota:** Asegurarse de que el archivo `.gitignore` sea respetado.
 - **Seguridad:** No subir archivos `.env` o carpetas `node_modules`.
 
