@@ -1,0 +1,111 @@
+/* ============================================
+   VELVET SYNC LOGO - ANIMATION ENGINE FINAL
+   Build once, stay fixed logic
+   ============================================ */
+
+.vs-logo-final {
+    overflow: visible;
+    /* Entry animation: Fade and scale */
+    animation: logo-entrance 1.2s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
+}
+
+@keyframes logo-entrance {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1.1);
+    }
+}
+
+.wave-path,
+.wave-core {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+}
+
+/* Drawing animations - Build once */
+.path-mag {
+    animation: draw-build 2.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s forwards;
+}
+
+.core-mag {
+    animation: draw-build 2.2s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards;
+}
+
+.path-cy {
+    animation: draw-build 2.5s cubic-bezier(0.4, 0, 0.2, 1) 0.6s forwards;
+}
+
+.core-cy {
+    animation: draw-build 2.2s cubic-bezier(0.4, 0, 0.2, 1) 0.9s forwards;
+}
+
+@keyframes draw-build {
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* Sync Center Node */
+.sync-center {
+    opacity: 0;
+    transform: scale(0);
+    animation: sync-appear 0.8s ease-out 2.8s forwards, vs-pulse 3s ease-in-out 3.5s infinite alternate;
+}
+
+@keyframes sync-appear {
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes vs-pulse {
+    from {
+        filter: blur(2px) drop-shadow(0 0 5px #fff);
+        opacity: 0.7;
+    }
+
+    to {
+        filter: blur(4px) drop-shadow(0 0 15px #fff);
+        opacity: 1;
+    }
+}
+
+/* Subtle atmosphere glow on paths - STAYS FIXED */
+.path-mag,
+.path-cy {
+    animation-fill-mode: forwards;
+}
+
+.grid-precision-dots {
+    opacity: 0;
+    animation: grid-in 1.5s ease-out 1.5s forwards;
+}
+
+@keyframes grid-in {
+    to {
+        opacity: 1;
+    }
+}
+
+/* No infinite spatial movement. The logo breathes in intensity only. */
+.vs-logo-final g[filter] {
+    animation: neon-breath 6s ease-in-out 3.5s infinite alternate;
+}
+
+@keyframes neon-breath {
+
+    0%,
+    100% {
+        filter: drop-shadow(0 0 15px rgba(228, 54, 129, 0.4));
+    }
+
+    50% {
+        filter: drop-shadow(0 0 25px rgba(0, 255, 238, 0.5));
+    }
+}

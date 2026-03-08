@@ -1,0 +1,107 @@
+/* ============================================
+   VELVET SYNC - APP STYLES
+   ============================================ */
+
+.app {
+  min-height: 100vh;
+  background: var(--velvet-black);
+}
+
+#root {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* ============================================
+   NAVIGATION
+   ============================================ */
+.app-nav {
+  background: linear-gradient(135deg, var(--velvet-dark) 0%, var(--velvet-card) 100%);
+  border-bottom: 2px solid var(--velvet-magenta);
+  padding: 1rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-white);
+  text-decoration: none;
+  transition: all 0.3s ease;
+}
+
+.nav-brand:hover {
+  color: var(--velvet-magenta);
+}
+
+.brand-icon {
+  font-size: 1.5rem;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+}
+
+.nav-link {
+  padding: 0.5rem 1rem;
+  background: var(--velvet-dark);
+  border: 1px solid var(--velvet-border);
+  border-radius: 8px;
+  color: var(--text-bone);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+  background: var(--velvet-card);
+  border-color: var(--velvet-magenta);
+  color: var(--text-white);
+}
+
+.admin-link {
+  background: var(--gradient-magenta);
+  border: none;
+  color: var(--text-white);
+}
+
+.admin-link:hover {
+  background: linear-gradient(135deg, #FF6B9D 0%, #E43681 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px var(--velvet-magenta-glow);
+}
+
+/* Responsive Navigation */
+@media (max-width: 768px) {
+  .app-nav {
+    padding: 1rem;
+  }
+  
+  .nav-container {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .nav-links {
+    width: 100%;
+    justify-content: center;
+  }
+}
