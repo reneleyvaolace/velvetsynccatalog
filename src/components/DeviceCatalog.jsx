@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import compatibleDevices from '../data/compatible_devices.json';
+import { supabase } from '../lib/supabase';
+import { getDeviceImage, getDeviceQR, getDevicePDF } from '../utils/mediaUtils';
 import { translateFunction } from '../utils/translations';
 import velvetLogo from '../assets/velvet_sync/velvet_sync_logo_integrated.png';
 import stealthIcon from '../assets/velvet_sync/stealth_icon.png';
@@ -89,9 +90,55 @@ function DeviceCatalog() {
     return originalNames[title] || null;
   };
 
+  // Helper to map data from Supabase to components expected format
+  const mapDeviceFromSupabase = (device) => {
+    // Parse supported_funcs (comma separated string) to motors array
+    const motors = device.supported_funcs ? device.supported_funcs.split(',').map(f => f.trim()) : [];
+    
+    // Parse motor_logic to funcObj
+    const funcObj = {
+      CH1: device.motor_logic === 'single' || device.motor_logic === 'dual',
+      CH2: device.motor_logic === 'dual'
+    };
+
+    return {
+      ...device,
+      title: device.model_name, // Aliasing for compatibility with JSX if not updated everywhere
+      pics: getDeviceImage(device.id),
+      qrcode: getDeviceQR(device.id),
+      motors: motors,
+      funcObj: funcObj,
+      isPrecise: device.is_precise_new ? 1 : 0,
+      barcode: device.id.toString(),
+      manualUrl: getDevicePDF(device.id),
+      techSheetUrl: getDevicePDF(device.id),
+      // Flatten category for simpler access in filters
+      usage_type: device.usage_type,
+      target_anatomy: device.target_anatomy,
+      stimulation_type: device.stimulation_type
+    };
+  };
+
   useEffect(() => {
-    setDevices(compatibleDevices);
-    setLoading(false);
+    const fetchDevices = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('device_catalog')
+          .select('*')
+          .order('id', { ascending: true });
+        
+        if (error) throw error;
+        if (data) {
+          const mappedData = data.map(mapDeviceFromSupabase);
+          setDevices(mappedData);
+        }
+      } catch (err) {
+        console.error('Error fetching from Supabase:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDevices();
   }, []);
 
   // Get all unique features from all devices
@@ -117,19 +164,19 @@ function DeviceCatalog() {
     // Taxonomy filters
     if (selectedUsageType) {
       result = result.filter(device =>
-        device.category && device.category.usageType === selectedUsageType
+        device.usage_type === selectedUsageType
       );
     }
 
     if (selectedAnatomy) {
       result = result.filter(device =>
-        device.category && device.category.targetAnatomy === selectedAnatomy
+        device.target_anatomy === selectedAnatomy
       );
     }
 
     if (selectedStimulation) {
       result = result.filter(device =>
-        device.category && device.category.stimulationType === selectedStimulation
+        device.stimulation_type === selectedStimulation
       );
     }
 
@@ -330,9 +377,9 @@ function DeviceCatalog() {
                 onChange={(e) => setSelectedUsageType(e.target.value)}
               >
                 <option value="">Todos</option>
-                <option value="Masculino">Masculino</option>
-                <option value="Femenino">Femenino</option>
-                <option value="Universal">Universal</option>
+                <option value="external">Externo</option>
+                <option value="internal">Interno</option>
+                <option value="universal">Universal</option>
               </select>
             </div>
 
@@ -345,11 +392,11 @@ function DeviceCatalog() {
                 onChange={(e) => setSelectedAnatomy(e.target.value)}
               >
                 <option value="">Todas</option>
-                <option value="Próstata">Próstata</option>
-                <option value="Clítoris">Clítoris</option>
-                <option value="Vaginal">Vaginal</option>
-                <option value="Anal">Anal</option>
-                <option value="Universal">Universal</option>
+                <option value="prostate">Próstata</option>
+                <option value="clitoral">Clítoris</option>
+                <option value="vaginal">Vaginal</option>
+                <option value="anal">Anal</option>
+                <option value="universal">Universal</option>
               </select>
             </div>
 
@@ -362,11 +409,11 @@ function DeviceCatalog() {
                 onChange={(e) => setSelectedStimulation(e.target.value)}
               >
                 <option value="">Todos</option>
-                <option value="Vibración">Vibración</option>
-                <option value="Succión">Succión</option>
-                <option value="Empuje">Empuje</option>
-                <option value="Calentamiento">Calentamiento</option>
-                <option value="Interactivo">Interactivo</option>
+                <option value="vibration">Vibración</option>
+                <option value="suction">Succión</option>
+                <option value="thrust">Empuje</option>
+                <option value="heating">Calentamiento</option>
+                <option value="interactive">Interactivo</option>
               </select>
             </div>
           </div>
