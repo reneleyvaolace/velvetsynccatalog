@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { getDeviceImage, getDeviceQR, getDevicePDF, getIconUrl } from '../utils/mediaUtils';
 import { translateFunction } from '../utils/translations';
+import { isMobile, openNativeApp, buildDeepLink } from '../utils/deepLinking';
 const GITHUB_BASE = 'https://raw.githubusercontent.com/reneleyvaolace/velvetsynccatalog/main/documentacion/docs';
 const velvetLogo = `${GITHUB_BASE}/logo_velvet.png`;
 
@@ -79,8 +80,10 @@ const formatCapability = (raw) => {
     };
   }
 
+  // Fallback para llaves desconocidas: Capitalize First
+  const fallbackLabel = key.charAt(0).toUpperCase() + key.slice(1);
   return {
-    label: key,
+    label: fallbackLabel,
     icon: null,
     active: value !== 'false'
   };
@@ -89,6 +92,32 @@ const formatCapability = (raw) => {
 
 
 
+
+// Taxonomy options with official Velvet Sync icons
+const TAXONOMY_OPTIONS = {
+  usage: [
+    { value: '', label: 'Todos', icon: 'icon_explore' },
+    { value: 'external', label: 'Externo', icon: 'icon_motion_control' },
+    { value: 'internal', label: 'Interno', icon: 'icon_vibrator' },
+    { value: 'universal', label: 'Universal', icon: 'icon_video' }
+  ],
+  anatomy: [
+    { value: '', label: 'Todas', icon: 'icon_tab_games' },
+    { value: 'clitoral', label: 'Clítoris', icon: 'icon_shake_mode' },
+    { value: 'vaginal', label: 'Vaginal', icon: 'icon_vibrator' },
+    { value: 'anal', label: 'Anal', icon: 'icon_pulse_waves' },
+    { value: 'prostate', label: 'Próstata', icon: 'icon_thrust' },
+    { value: 'universal', label: 'Universal', icon: 'icon_explore' }
+  ],
+  stimulation: [
+    { value: '', label: 'Todos', icon: 'icon_explore' },
+    { value: 'vibration', label: 'Vibración', icon: 'icon_intensity' },
+    { value: 'suction', label: 'Succión', icon: 'icon_suction' },
+    { value: 'thrust', label: 'Empuje', icon: 'icon_thrust' },
+    { value: 'heating', label: 'Calor', icon: 'icon_heat' },
+    { value: 'interactive', label: 'Interactivo', icon: 'icon_remote_partner' }
+  ]
+};
 
 /**
  * Velvet Sync Device Catalog
@@ -117,6 +146,14 @@ function DeviceCatalog() {
   const [testProgress, setTestProgress] = useState(0);
   const [testLog, setTestLog] = useState([]);
   const testTimerRef = useRef(null);
+
+  // Mobile app detection state
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  useEffect(() => {
+    // Detect if running on mobile
+    setIsMobileDevice(isMobile());
+  }, []);
 
   // AI-Ready devices (rMesh 11-byte protocol)
   const AI_READY_DEVICES = useMemo(() => new Set([
@@ -176,8 +213,10 @@ function DeviceCatalog() {
 
   // Helper to map data from Supabase to components expected format
   const mapDeviceFromSupabase = (device) => {
-    // Parse supported_funcs (comma separated string) to motors array
-    const motors = device.supported_funcs ? device.supported_funcs.split(',').map(f => f.trim()) : [];
+    // Parse supported_funcs (exhaustively split by commas, pipes, or semicolons)
+    const motors = device.supported_funcs 
+      ? device.supported_funcs.split(/[|,;]/).map(f => f.trim()).filter(Boolean) 
+      : [];
     
     // Parse motor_logic to funcObj
     const funcObj = {
@@ -187,19 +226,19 @@ function DeviceCatalog() {
 
     return {
       ...device,
-      title: device.model_name, // Aliasing for compatibility with JSX if not updated everywhere
-      pics: getDeviceImage(device.id),
-      qrcode: getDeviceQR(device.id),
+      title: device.model_name || `Dispositivo ${device.id}`, // Aliasing for compatibility
+      pics: device.image_url || getDeviceImage(device.id),
+      qrcode: device.qr_code_url || getDeviceQR(device.id),
       motors: motors,
       funcObj: funcObj,
       isPrecise: device.is_precise_new ? 1 : 0,
-      barcode: device.id.toString(),
-      manualUrl: getDevicePDF(device.id),
-      techSheetUrl: getDevicePDF(device.id),
+      barcode: device.barcode || device.id.toString(),
+      manualUrl: device.ficha_tecnica_url || getDevicePDF(device.id),
+      techSheetUrl: device.ficha_tecnica_url || getDevicePDF(device.id),
       // Flatten category for simpler access in filters
-      usage_type: device.usage_type,
-      target_anatomy: device.target_anatomy,
-      stimulation_type: device.stimulation_type
+      usage_type: device.usage_type || 'universal',
+      target_anatomy: device.target_anatomy || 'universal',
+      stimulation_type: device.stimulation_type || 'vibration'
     };
   };
 
@@ -354,26 +393,19 @@ function DeviceCatalog() {
   // Run AI Test (3-5 seconds)
   const runAITest = () => {
     setAiDemoState('speaking');
+    setAiMessage(`Iniciando Laboratorio de Optimización para ${selectedDevice.title}...`);
 
-    // AI Avatar speaks
-    const aiPhrases = [
-      'Siente este susurro profundo...',
-      'Sincronizando con tu ritmo...',
-      'Iniciando secuencia de placer...',
-      'Conectando con tus sentidos...',
-      'Prepárate para la experiencia...',
-    ];
-    const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
-    setAiMessage(randomPhrase);
-
-    // After 1.5s, start BLE test
+    // AI Avatar speaks - More professional / engineering tone
     setTimeout(() => {
       setAiDemoState('testing');
       setTestProgress(0);
-      setTestLog(['🔗 Iniciando conexión BLE...', '📡 Protocolo rMesh: 11 bytes', '⚡ Precisión: 0-255']);
+      setTestLog([
+        '🔒 Estableciendo túnel P2P cifrado...',
+        `📡 Detectado: ${selectedDevice.title} (ID: ${selectedDevice.id})`,
+        `⚙️ Arquitectura: ${selectedDevice.motor_logic === 'dual' ? 'Dual Channel rMesh' : 'Single Channel Standard'}`
+      ]);
 
-      // Simulate test duration (3-5 seconds random)
-      const testDuration = Math.floor(Math.random() * 2000) + 3000; // 3000-5000ms
+      const testDuration = 6000; // 6s duration for more presence
       const startTime = Date.now();
 
       testTimerRef.current = setInterval(() => {
@@ -381,15 +413,26 @@ function DeviceCatalog() {
         const progress = Math.min((elapsed / testDuration) * 100, 100);
         setTestProgress(progress);
 
-        // Add log entries at specific points
+        // Dynamic log messages based on device capabilities
         if (elapsed > 1000 && elapsed < 1100) {
-          setTestLog(prev => [...prev, '🔄 Enviando ráfaga de prueba...']);
+          setTestLog(prev => [...prev, '⚡ Calibrando latencia de respuesta...']);
         }
         if (elapsed > 2000 && elapsed < 2100) {
-          setTestLog(prev => [...prev, '✅ Respuesta recibida']);
+          const mainCap = selectedDevice.stimulation_type || 'Vibración';
+          setTestLog(prev => [...prev, `🌀 Sincronizando impulsos de ${mainCap}...`]);
+        }
+        if (elapsed > 3500 && elapsed < 3600) {
+          if (selectedDevice.is_precise_new) {
+            setTestLog(prev => [...prev, '🎯 Verificando precisión 0-255 (Impulse Verified)']);
+          } else {
+            setTestLog(prev => [...prev, '📈 Validando curvas de intensidad estándar...']);
+          }
+        }
+        if (elapsed > 4500 && elapsed < 4600) {
+          setTestLog(prev => [...prev, '🛡️ Capa de privacidad Velvet Sync: Activa']);
         }
 
-        if (elapsed >= testDuration) {
+        if (progress >= 100) {
           clearInterval(testTimerRef.current);
           completeAITest();
         }
@@ -425,6 +468,59 @@ function DeviceCatalog() {
     setShowAIDemo(false);
     setAiDemoState('idle');
     setSelectedDevice(null);
+  };
+
+  // Open native app or sync with Supabase
+  const handleOpenNativeApp = async (action = 'connect') => {
+    if (!selectedDevice) return;
+
+    // 1. Intentar abrir la app vía Deep Link (velvetsync://)
+    const deepLink = `velvetsync://device/${selectedDevice.id}?action=${action}`;
+    
+    // 2. Registrar la intención en Supabase para sincronización Realtime (Web -> App bridge)
+    try {
+      const { data, error } = await supabase
+        .from('device_sync')
+        .insert([
+          { 
+            device_id: selectedDevice.id, 
+            command: action === 'sync_profile' ? 'APPLY_AI_PROFILE' : 'INIT_CONNECTION',
+            payload: {
+              timestamp: new Date().toISOString(),
+              toy_id: selectedDevice.id,
+              ai_optimized: true,
+              motor_logic: selectedDevice.motor_logic,
+              intensity_map: [255, 128, 64] // Simulado: perfil de intensidad optimizado
+            },
+            status: 'pending'
+          }
+        ]);
+
+      if (error) throw error;
+      console.log('📡 Sincronización enviada a Supabase:', data);
+    } catch (err) {
+      console.error('❌ Error de sincronización:', err);
+    }
+
+    // 3. Si es móvil, intentar el disparo del Deep Link
+    if (isMobileDevice) {
+      window.location.href = deepLink;
+      
+      // Fallback si no abre en 2 segundos
+      setTimeout(() => {
+        alert(
+          `📡 Perfil optimizado enviado al puente Velvet Sync.\n\n` +
+          `Abre la Velvet Sync App en tu dispositivo para aplicar los cambios a tu ${selectedDevice.title}.`
+        );
+      }, 2000);
+      return;
+    }
+
+    // Si es Desktop, informar que se envió el perfil a la nube
+    alert(
+      `🧪 Perfil "Sináptico" enviado con éxito.\n\n` +
+      `Tu ${selectedDevice.title} (SN: ${selectedDevice.id}) recibirá la configuración en cuanto abras la app móvil.`
+    );
   };
 
   if (loading) {
@@ -469,10 +565,10 @@ function DeviceCatalog() {
               Control total sobre tu hardware. Sin nubes. Sin vigilancia. Sin compromisos.
             </p>
             <div className="hero-badges">
-              <span className="hero-badge">🔒 End-to-End Encrypted</span>
-              <span className="hero-badge">📡 rMesh Protocol</span>
-              <span className="hero-badge">🖥 Local-First</span>
-              <span className="hero-badge ai-badge">🤖 AI Impulse Ready</span>
+              <span className="hero-badge">🔒 Cifrado de Extremo a Extremo</span>
+              <span className="hero-badge">📡 Protocolo rMesh</span>
+              <span className="hero-badge">🖥 Ejecución Local</span>
+              <span className="hero-badge ai-badge">🤖 Listo para AI Impulse</span>
             </div>
           </div>
         </div>
@@ -482,56 +578,85 @@ function DeviceCatalog() {
       <div className="filters-section">
         {/* Taxonomy Filters */}
         <div className="taxonomy-filters">
-          <h3 className="taxonomy-title">🔬 Taxonomía de Dispositivos</h3>
+          <h3 className="taxonomy-title">🔬 Taxonomía de Filtros Visuales</h3>
 
-          <div className="taxonomy-grid">
+          <div className="taxonomy-visual-grid">
             {/* Tipo de Uso */}
-            <div className="taxonomy-select-group">
+            <div className="taxonomy-visual-group">
               <label className="taxonomy-label">Tipo de Uso:</label>
-              <select
-                className="taxonomy-select"
-                value={selectedUsageType}
-                onChange={(e) => setSelectedUsageType(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="external">Externo</option>
-                <option value="internal">Interno</option>
-                <option value="universal">Universal</option>
-              </select>
+              <div className="taxonomy-chips">
+                {TAXONOMY_OPTIONS.usage.map(opt => (
+                  <button 
+                    key={opt.value}
+                    className={`taxonomy-chip ${selectedUsageType === opt.value ? 'active' : ''}`}
+                    onClick={() => setSelectedUsageType(opt.value)}
+                  >
+                    <span className="chip-icon">
+                      <img 
+                        src={getIconUrl(opt.icon)} 
+                        alt="" 
+                        className="taxonomy-icon-img" 
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    </span>
+                    <span className="chip-label">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Anatomía Objetivo */}
-            <div className="taxonomy-select-group">
+            <div className="taxonomy-visual-group">
               <label className="taxonomy-label">Anatomía Objetivo:</label>
-              <select
-                className="taxonomy-select"
-                value={selectedAnatomy}
-                onChange={(e) => setSelectedAnatomy(e.target.value)}
-              >
-                <option value="">Todas</option>
-                <option value="prostate">Próstata</option>
-                <option value="clitoral">Clítoris</option>
-                <option value="vaginal">Vaginal</option>
-                <option value="anal">Anal</option>
-                <option value="universal">Universal</option>
-              </select>
+              <div className="taxonomy-chips">
+                {TAXONOMY_OPTIONS.anatomy.map(opt => (
+                  <button 
+                    key={opt.value}
+                    className={`taxonomy-chip ${selectedAnatomy === opt.value ? 'active' : ''}`}
+                    onClick={() => setSelectedAnatomy(opt.value)}
+                  >
+                    <span className="chip-icon">
+                      <img 
+                        src={getIconUrl(opt.icon)} 
+                        alt="" 
+                        className="taxonomy-icon-img" 
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    </span>
+                    <span className="chip-label">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Tipo de Estimulación */}
-            <div className="taxonomy-select-group">
+            <div className="taxonomy-visual-group">
               <label className="taxonomy-label">Tipo de Estimulación:</label>
-              <select
-                className="taxonomy-select"
-                value={selectedStimulation}
-                onChange={(e) => setSelectedStimulation(e.target.value)}
-              >
-                <option value="">Todos</option>
-                <option value="vibration">Vibración</option>
-                <option value="suction">Succión</option>
-                <option value="thrust">Empuje</option>
-                <option value="heating">Calentamiento</option>
-                <option value="interactive">Interactivo</option>
-              </select>
+              <div className="taxonomy-chips">
+                {TAXONOMY_OPTIONS.stimulation.map(opt => (
+                  <button 
+                    key={opt.value}
+                    className={`taxonomy-chip ${selectedStimulation === opt.value ? 'active' : ''}`}
+                    onClick={() => setSelectedStimulation(opt.value)}
+                  >
+                    <span className="chip-icon">
+                      <img 
+                        src={getIconUrl(opt.icon)} 
+                        alt="" 
+                        className="taxonomy-icon-img" 
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    </span>
+                    <span className="chip-label">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -573,19 +698,35 @@ function DeviceCatalog() {
             <span className="active-filters-label">Filtros activos:</span>
             {selectedUsageType && (
               <span className="active-filter-tag taxonomy-tag">
-                📊 Uso: {selectedUsageType}
+                📊 Uso: {
+                  selectedUsageType === 'external' ? 'Externo' : 
+                  selectedUsageType === 'internal' ? 'Interno' : 
+                  selectedUsageType === 'universal' ? 'Universal' : selectedUsageType
+                }
                 <button onClick={() => setSelectedUsageType('')}>✕</button>
               </span>
             )}
             {selectedAnatomy && (
               <span className="active-filter-tag taxonomy-tag">
-                🎯 Anatomía: {selectedAnatomy}
+                🎯 Anatomía: {
+                  selectedAnatomy === 'clitoral' ? 'Clítoris' :
+                  selectedAnatomy === 'vaginal' ? 'Vaginal' :
+                  selectedAnatomy === 'anal' ? 'Anal' :
+                  selectedAnatomy === 'prostate' ? 'Próstata' :
+                  selectedAnatomy === 'universal' ? 'Universal' : selectedAnatomy
+                }
                 <button onClick={() => setSelectedAnatomy('')}>✕</button>
               </span>
             )}
             {selectedStimulation && (
               <span className="active-filter-tag taxonomy-tag">
-                ⚡ Estimulación: {selectedStimulation}
+                ⚡ Estimulación: {
+                  selectedStimulation === 'vibration' ? 'Vibración' :
+                  selectedStimulation === 'suction' ? 'Succión' :
+                  selectedStimulation === 'thrust' ? 'Empuje' :
+                  selectedStimulation === 'heating' ? 'Calentamiento' :
+                  selectedStimulation === 'interactive' ? 'Interactivo' : selectedStimulation
+                }
                 <button onClick={() => setSelectedStimulation('')}>✕</button>
               </span>
             )}
@@ -768,8 +909,13 @@ function DeviceCatalog() {
                   <div className="device-capabilities">
                     {device.motors && device.motors.length > 0 ? (
                       <div className="capability-badges">
-                        {device.motors.slice(0, 4).map((cap, idx) => {
-                          const formatted = formatCapability(cap);
+                        {device.motors
+                          .flatMap(m => typeof m === 'string' ? m.split(/[|,;]/) : m)
+                          .map(f => f.trim())
+                          .filter(Boolean)
+                          .slice(0, 5)
+                          .map((cap, idx) => {
+                            const formatted = formatCapability(cap);
                           if (!formatted) return null;
                           // Solo mostramos las que son TRUE en la tarjeta de la galería para no saturar
                           if (!formatted.active) return null;
@@ -800,19 +946,22 @@ function DeviceCatalog() {
 
 
                   {/* Connect Button */}
-                  <button
-                    className={`connect-btn ${deviceAIReady ? 'ai-ready' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // Todos los dispositivos abren el modal, los AI Ready también pueden usar Demo IA
-                      setSelectedDevice(device);
-                    }}
-                    title={deviceAIReady ? 'Dispositivo compatible con IA - Click para Demo' : 'Vincular dispositivo'}
-                  >
-                    <span className="btn-icon">{deviceAIReady ? '✨' : '✦'}</span>
-                    {deviceAIReady ? 'Experiencia IA' : 'Descubre más'}
-
-                  </button>
+                  <div className="device-actions">
+                    <button
+                      className={`connect-btn ${deviceAIReady ? 'ai-lab-trigger' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (deviceAIReady) {
+                          startAIDemo(device);
+                        } else {
+                          setSelectedDevice(device);
+                        }
+                      }}
+                    >
+                      <span className="btn-icon">{deviceAIReady ? '🧠' : '✦'}</span>
+                      {deviceAIReady ? 'Laboratorio IA' : 'Especificaciones'}
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -820,88 +969,132 @@ function DeviceCatalog() {
         )}
       </div>
 
-      {/* AI Demo Modal */}
+      {/* AI Demo Modal - VELVET LAB MODE */}
       {showAIDemo && selectedDevice && (
         <div className="ai-demo-overlay" onClick={closeAIDemo}>
-          <div className="ai-demo-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="ai-demo-modal velvet-lab-mode" onClick={(e) => e.stopPropagation()}>
             <button className="ai-demo-close" onClick={closeAIDemo}>
               &times;
             </button>
 
             <div className="ai-demo-content">
-              {/* AI Avatar Section */}
-              <div className="ai-avatar-section">
+              {/* Header with Velvet Logo */}
+              <div className="ai-lab-header">
+                <img src={velvetLogo} alt="Velvet Sync" className="ai-lab-logo" />
+                <div className="ai-lab-tag">LABORATORIO DE IA</div>
+              </div>
+
+              {/* Haptic Visualizer / Avatar */}
+              <div className={`ai-avatar-section ${aiDemoState}`}>
                 <div className={`ai-avatar ${aiDemoState}`}>
                   <div className="avatar-ring"></div>
                   <div className="avatar-core"></div>
-                  <div className="avatar-particles"></div>
+                  <div className="avatar-haptic-pulse"></div>
                 </div>
                 <div className="ai-status">
-                  {aiDemoState === 'idle' && <span>🟢 IA Lista</span>}
-                  {aiDemoState === 'speaking' && <span>🔵 Analizando...</span>}
-                  {aiDemoState === 'testing' && <span>🟡 Ejecutando Test...</span>}
-                  {aiDemoState === 'complete' && <span>🟢 Test Completado</span>}
+                  {aiDemoState === 'idle' && 'VELVET AI: LISTO'}
+                  {aiDemoState === 'speaking' && 'ANALIZANDO HARDWARE...'}
+                  {aiDemoState === 'testing' && 'SINCRONIZACIÓN SINÁPTICA'}
+                  {aiDemoState === 'complete' && 'OPTIMIZACIÓN FINALIZADA'}
                 </div>
               </div>
 
-              {/* AI Message Bubble */}
+              {/* Status Message */}
               {aiMessage && (
-                <div className="ai-message-bubble">
+                <div className="ai-message-bubble lab-style">
                   <p>{aiMessage}</p>
                 </div>
               )}
 
-              {/* Device Info */}
-              <div className="ai-device-info">
+              {/* Device Tech Context */}
+              <div className="ai-device-info lab-context">
                 <h3>{selectedDevice.title}</h3>
-                <p className="device-id">ID: {selectedDevice.id}</p>
+                <p className="device-id">SN: {selectedDevice.id}</p>
                 <div className="ai-specs">
-                  <span className="spec-badge">rMesh 11 bytes</span>
-                  <span className="spec-badge">Precisión 0-255</span>
-                  <span className="spec-badge">BLE 5.0</span>
+                  <span className="spec-badge">
+                    {selectedDevice.motor_logic === 'dual' ? 'DUAL MOTOR' : 'SINGLE MOTOR'}
+                  </span>
+                  {selectedDevice.is_precise_new && (
+                    <span className="spec-badge precision">IMPULSE VERIFIED</span>
+                  )}
+                  <span className="spec-badge">
+                    {selectedDevice.usage_type.toUpperCase()}
+                  </span>
                 </div>
               </div>
 
-              {/* Test Button */}
+              {/* Pulse Visualizer (Active during test) */}
+              {aiDemoState === 'testing' && (
+                <div className="haptic-visualizer-bars">
+                  {[...Array(8)].map((_, i) => (
+                    <div 
+                      key={i} 
+                      className="haptic-bar" 
+                      style={{ 
+                        animationDelay: `${i * 0.1}s`,
+                        height: `${30 + Math.random() * 70}%`
+                      }}
+                    ></div>
+                  ))}
+                </div>
+              )}
+
+              {/* Initial Action */}
               {aiDemoState === 'idle' && (
-                <button className="ai-test-btn" onClick={runAITest}>
-                  <span className="btn-icon">⚡</span>
-                  Iniciar Test IA (3-5s)
+                <button className="ai-test-btn lab-btn" onClick={runAITest}>
+                  <span className="btn-icon">🧠</span>
+                  Iniciar Sincronización IA
                 </button>
               )}
 
               {/* Progress Bar */}
               {aiDemoState === 'testing' && (
-                <div className="test-progress-section">
+                <div className="test-progress-section lab-progress">
                   <div className="progress-bar">
                     <div
                       className="progress-fill"
                       style={{ width: `${testProgress}%` }}
                     ></div>
                   </div>
-                  <p className="progress-text">{Math.round(testProgress)}%</p>
+                  <div className="progress-footer">
+                    <span className="progress-pct">{Math.round(testProgress)}%</span>
+                    <span className="progress-detail">CALIBRANDO SENSORES</span>
+                  </div>
                 </div>
               )}
 
               {/* Test Log */}
-              {testLog.length > 0 && (
-                <div className="test-log">
-                  <h4>Registro de Operaciones:</h4>
+              {(testLog.length > 0) && (
+                <div className="test-log lab-log">
                   <div className="log-entries">
                     {testLog.map((entry, idx) => (
                       <div key={idx} className={`log-entry ${entry.includes('🛑') ? 'stop-command' : ''}`}>
-                        {entry}
+                        <span className="log-timestamp">[{new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' })}]</span> {entry}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Close Button */}
+              {/* Final Actions */}
               {aiDemoState === 'complete' && (
-                <button className="ai-close-btn" onClick={closeAIDemo}>
-                  Cerrar Demo
-                </button>
+                <div className="ai-demo-actions lab-actions">
+                  <div className="complete-summary">
+                    <p>Perfil de placer generado y cifrado localmente para este hardware.</p>
+                  </div>
+                  
+                  <button 
+                    className="ai-open-app-btn pulse-glow" 
+                    onClick={() => handleOpenNativeApp('sync_profile')}
+                  >
+                    <span className="btn-icon">⚡</span>
+                    Subir Perfil a Velvet App
+                  </button>
+                  
+                  <button className="ai-close-btn lab-secondary" onClick={closeAIDemo}>
+                    Finalizar Sesión
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -909,7 +1102,7 @@ function DeviceCatalog() {
       )}
 
       {/* Device Detail Modal (non-AI) */}
-      {!showAIDemo && selectedDevice && !isAIReady(selectedDevice.id) && (
+      {!showAIDemo && selectedDevice && (
         <div className="device-modal-overlay" onClick={() => setSelectedDevice(null)}>
           <div className="device-modal" onClick={(e) => e.stopPropagation()}>
             <button className="device-modal-close" onClick={() => setSelectedDevice(null)}>
@@ -944,14 +1137,25 @@ function DeviceCatalog() {
                   </div>
                 )}
 
-                {/* Connect Button Large */}
+                {/* Connect Button Large - Tries to open native app */}
                 <button
                   className="connect-btn-large"
-                  onClick={() => setSelectedDevice(null)}
+                  onClick={handleOpenNativeApp}
                 >
                   <span className="btn-icon">📡</span>
-                  Vincular en Velvet Sync
+                  {isMobileDevice ? 'Vincular en App' : 'Vincular en Velvet Sync'}
                 </button>
+
+                {/* Open in App Button - Only show on mobile as alternative */}
+                {isMobileDevice && (
+                  <button
+                    className="open-app-btn-large"
+                    onClick={handleOpenNativeApp}
+                  >
+                    <span className="btn-icon">📱</span>
+                    Abrir en la App
+                  </button>
+                )}
               </div>
 
               <div className="device-modal-info">
@@ -995,8 +1199,12 @@ function DeviceCatalog() {
                   <h3>Características / Capacidades</h3>
                   {selectedDevice.motors && selectedDevice.motors.length > 0 ? (
                     <div className="capability-tags">
-                      {selectedDevice.motors.map((cap, idx) => {
-                        const formatted = formatCapability(cap);
+                      {selectedDevice.motors
+                        .flatMap(m => typeof m === 'string' ? m.split(/[|,;]/) : m)
+                        .map(f => f.trim())
+                        .filter(Boolean)
+                        .map((cap, idx) => {
+                          const formatted = formatCapability(cap);
                         if (!formatted) return null;
                         
                         return (
@@ -1081,8 +1289,8 @@ function DeviceCatalog() {
                 {isAIReady(selectedDevice.id) && (
                   <div className="device-modal-ai">
                     <button className="ai-demo-btn" onClick={() => startAIDemo(selectedDevice)}>
-                      <span className="btn-icon">🤖</span>
-                      Iniciar Demo IA
+                      <span className="btn-icon">✨</span>
+                      Experiencia IA
                     </button>
                     <p className="ai-note">
                       ✨ Este dispositivo es compatible con Velvet Sync AI Impulse

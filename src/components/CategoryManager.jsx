@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import compatibleDevices from '../data/compatible_devices.json';
+import { supabase } from '../lib/supabase';
 import './CategoryManager.css';
 
 /**
@@ -36,27 +36,60 @@ function CategoryManager() {
   const [bulkAnatomy, setBulkAnatomy] = useState('');
   const [bulkStimulation, setBulkStimulation] = useState('');
 
-  // Usage type options
-  const usageTypes = ['Masculino', 'Femenino', 'Universal'];
+  // Usage type options (Values match Supabase slugs, labels match UI)
+  const usageOptions = [
+    { value: 'external', label: 'Externo' },
+    { value: 'internal', label: 'Interno' },
+    { value: 'universal', label: 'Universal' }
+  ];
 
   // Anatomy options
-  const anatomies = ['Próstata', 'Clítoris', 'Vaginal', 'Anal', 'Universal'];
+  const anatomyOptions = [
+    { value: 'clitoral', label: 'Clítoris' },
+    { value: 'vaginal', label: 'Vaginal' },
+    { value: 'anal', label: 'Anal' },
+    { value: 'prostate', label: 'Próstata' },
+    { value: 'universal', label: 'Universal' }
+  ];
 
   // Stimulation options
-  const stimulations = ['Vibración', 'Succión', 'Empuje', 'Calentamiento', 'Interactivo'];
+  const stimulationOptions = [
+    { value: 'vibration', label: 'Vibración' },
+    { value: 'suction', label: 'Succión' },
+    { value: 'thrust', label: 'Empuje' },
+    { value: 'heating', label: 'Calentamiento' },
+    { value: 'interactive', label: 'Interactivo' }
+  ];
 
   useEffect(() => {
-    // Load devices with their current categories
-    const devicesWithCategories = compatibleDevices.map(device => ({
-      ...device,
-      category: device.category || {
-        usageType: 'Universal',
-        targetAnatomy: 'Anal',
-        stimulationType: 'Vibración'
-      },
-      motorLogic: device.motorLogic || 'Single Channel'
-    }));
-    setDevices(devicesWithCategories);
+    const fetchDevices = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('device_catalog')
+          .select('*')
+          .order('id', { ascending: true });
+        
+        if (error) throw error;
+        if (data) {
+          const mappedData = data.map(device => ({
+            ...device,
+            // Mapping Supabase fields to the current state expectation
+            title: device.model_name,
+            barcode: device.id.toString(),
+            category: {
+              usageType: device.usage_type || 'universal',
+              targetAnatomy: device.target_anatomy || 'universal',
+              stimulationType: device.stimulation_type || 'vibration'
+            },
+            motorLogic: device.motor_logic || 'single'
+          }));
+          setDevices(mappedData);
+        }
+      } catch (err) {
+        console.error('Error fetching from Supabase:', err);
+      }
+    };
+    fetchDevices();
   }, []);
 
   // Filter and sort devices
@@ -205,9 +238,9 @@ function CategoryManager() {
         return {
           ...device,
           category: {
-            usageType: bulkUsageType || device.category?.usageType || 'Universal',
-            targetAnatomy: bulkAnatomy || device.category?.targetAnatomy || 'Anal',
-            stimulationType: bulkStimulation || device.category?.stimulationType || 'Vibración'
+            usageType: bulkUsageType || device.category?.usageType || 'universal',
+            targetAnatomy: bulkAnatomy || device.category?.targetAnatomy || 'universal',
+            stimulationType: bulkStimulation || device.category?.stimulationType || 'vibration'
           }
         };
       }
@@ -253,6 +286,44 @@ function CategoryManager() {
     }));
   };
 
+  // Save changes to Supabase
+  const saveToDatabase = async () => {
+    try {
+      // Prepare data for update
+      const updates = devices.map(device => ({
+        id: device.id,
+        model_name: device.title,
+        usage_type: device.category.usageType,
+        target_anatomy: device.category.targetAnatomy,
+        stimulation_type: device.category.stimulationType,
+        motor_logic: device.motorLogic.includes('Dual') ? 'dual' : 'single',
+        updated_at: new Date().toISOString()
+      }));
+
+      for (const update of updates) {
+        const { error } = await supabase
+          .from('device_catalog')
+          .update({
+            model_name: update.model_name,
+            usage_type: update.usage_type,
+            target_anatomy: update.target_anatomy,
+            stimulation_type: update.stimulation_type,
+            motor_logic: update.motor_logic
+          })
+          .eq('id', update.id);
+
+        if (error) throw error;
+      }
+
+      setSavedChanges(0);
+      setShowSavedNotification(true);
+      setTimeout(() => setShowSavedNotification(false), 3000);
+    } catch (err) {
+      console.error('Error saving to Supabase:', err);
+      alert('Error al guardar en la base de datos');
+    }
+  };
+
   // Export updated devices to JSON
   const exportToJson = () => {
     const dataStr = JSON.stringify(devices, null, 2);
@@ -292,13 +363,13 @@ function CategoryManager() {
     
     const { usageType, targetAnatomy, stimulationType } = category;
     
-    if (usageType === 'Masculino') return 'category-badge masculino';
-    if (usageType === 'Femenino') return 'category-badge femenino';
-    if (targetAnatomy === 'Próstata') return 'category-badge prostata';
-    if (targetAnatomy === 'Clítoris') return 'category-badge clitoris';
-    if (targetAnatomy === 'Vaginal') return 'category-badge vaginal';
-    if (targetAnatomy === 'Anal') return 'category-badge anal';
-    if (stimulationType === 'Interactivo') return 'category-badge interactivo';
+    if (usageType === 'external') return 'category-badge masculino';
+    if (usageType === 'internal') return 'category-badge femenino';
+    if (targetAnatomy === 'prostate') return 'category-badge prostata';
+    if (targetAnatomy === 'clitoral') return 'category-badge clitoris';
+    if (targetAnatomy === 'vaginal') return 'category-badge vaginal';
+    if (targetAnatomy === 'anal') return 'category-badge anal';
+    if (stimulationType === 'interactive') return 'category-badge interactivo';
     
     return 'category-badge universal';
   };
@@ -330,8 +401,11 @@ function CategoryManager() {
           <button className="action-btn copy-btn" onClick={copyToClipboard}>
             📋 Copiar JSON
           </button>
+          <button className="action-btn export-btn" onClick={saveToDatabase}>
+            💾 Guardar en DB
+          </button>
           <button className="action-btn export-btn" onClick={exportToJson}>
-            💾 Descargar JSON
+            📥 Descargar JSON
           </button>
         </div>
       </header>
@@ -343,15 +417,15 @@ function CategoryManager() {
           <span className="stat-label">Dispositivos</span>
         </div>
         <div className="stat-item">
-          <span className="stat-value">{devices.filter(d => d.category?.usageType === 'Masculino').length}</span>
-          <span className="stat-label">Uso Masculino</span>
+          <span className="stat-value">{devices.filter(d => d.category?.usageType === 'external').length}</span>
+          <span className="stat-label">Externo</span>
         </div>
         <div className="stat-item">
-          <span className="stat-value">{devices.filter(d => d.category?.usageType === 'Femenino').length}</span>
-          <span className="stat-label">Uso Femenino</span>
+          <span className="stat-value">{devices.filter(d => d.category?.usageType === 'internal').length}</span>
+          <span className="stat-label">Interno</span>
         </div>
         <div className="stat-item">
-          <span className="stat-value">{devices.filter(d => d.category?.usageType === 'Universal').length}</span>
+          <span className="stat-value">{devices.filter(d => d.category?.usageType === 'universal').length}</span>
           <span className="stat-label">Universal</span>
         </div>
         <div className="stat-item">
@@ -384,9 +458,9 @@ function CategoryManager() {
                 onChange={(e) => setFilterUsageType(e.target.value)}
               >
                 <option value="">Todos</option>
-                <option value="Masculino">Masculino</option>
-                <option value="Femenino">Femenino</option>
-                <option value="Universal">Universal</option>
+                {usageOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -398,11 +472,9 @@ function CategoryManager() {
                 onChange={(e) => setFilterAnatomy(e.target.value)}
               >
                 <option value="">Todas</option>
-                <option value="Próstata">Próstata</option>
-                <option value="Clítoris">Clítoris</option>
-                <option value="Vaginal">Vaginal</option>
-                <option value="Anal">Anal</option>
-                <option value="Universal">Universal</option>
+                {anatomyOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -414,11 +486,9 @@ function CategoryManager() {
                 onChange={(e) => setFilterStimulation(e.target.value)}
               >
                 <option value="">Todas</option>
-                <option value="Vibración">Vibración</option>
-                <option value="Succión">Succión</option>
-                <option value="Empuje">Empuje</option>
-                <option value="Calentamiento">Calentamiento</option>
-                <option value="Interactivo">Interactivo</option>
+                {stimulationOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -497,9 +567,9 @@ function CategoryManager() {
                 onChange={(e) => setBulkUsageType(e.target.value)}
               >
                 <option value="">Sin cambiar</option>
-                <option value="Masculino">Masculino</option>
-                <option value="Femenino">Femenino</option>
-                <option value="Universal">Universal</option>
+                {usageOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -511,11 +581,9 @@ function CategoryManager() {
                 onChange={(e) => setBulkAnatomy(e.target.value)}
               >
                 <option value="">Sin cambiar</option>
-                <option value="Próstata">Próstata</option>
-                <option value="Clítoris">Clítoris</option>
-                <option value="Vaginal">Vaginal</option>
-                <option value="Anal">Anal</option>
-                <option value="Universal">Universal</option>
+                {anatomyOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -527,11 +595,9 @@ function CategoryManager() {
                 onChange={(e) => setBulkStimulation(e.target.value)}
               >
                 <option value="">Sin cambiar</option>
-                <option value="Vibración">Vibración</option>
-                <option value="Succión">Succión</option>
-                <option value="Empuje">Empuje</option>
-                <option value="Calentamiento">Calentamiento</option>
-                <option value="Interactivo">Interactivo</option>
+                {stimulationOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
               </select>
             </div>
 
@@ -614,7 +680,7 @@ function CategoryManager() {
                       </button>
                       {device.category && (
                         <span className={getCategoryBadgeClass(device.category)}>
-                          {device.category.usageType}
+                          {usageOptions.find(o => o.value === device.category.usageType)?.label || device.category.usageType}
                         </span>
                       )}
                     </div>
@@ -638,12 +704,12 @@ function CategoryManager() {
                 <td className="cell-usage">
                   <select
                     className="category-select"
-                    value={device.category?.usageType || 'Universal'}
+                    value={device.category?.usageType || 'universal'}
                     onChange={(e) => updateCategory(device.id, 'usageType', e.target.value)}
                   >
                     <option value="">Seleccionar...</option>
-                    {usageTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
+                    {usageOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </td>
@@ -652,12 +718,12 @@ function CategoryManager() {
                 <td className="cell-anatomy">
                   <select
                     className="category-select"
-                    value={device.category?.targetAnatomy || 'Anal'}
+                    value={device.category?.targetAnatomy || 'universal'}
                     onChange={(e) => updateCategory(device.id, 'targetAnatomy', e.target.value)}
                   >
                     <option value="">Seleccionar...</option>
-                    {anatomies.map(anatomy => (
-                      <option key={anatomy} value={anatomy}>{anatomy}</option>
+                    {anatomyOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </td>
@@ -666,12 +732,12 @@ function CategoryManager() {
                 <td className="cell-stimulation">
                   <select
                     className="category-select"
-                    value={device.category?.stimulationType || 'Vibración'}
+                    value={device.category?.stimulationType || 'vibration'}
                     onChange={(e) => updateCategory(device.id, 'stimulationType', e.target.value)}
                   >
                     <option value="">Seleccionar...</option>
-                    {stimulations.map(stim => (
-                      <option key={stim} value={stim}>{stim}</option>
+                    {stimulationOptions.map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 </td>
@@ -711,12 +777,12 @@ function CategoryManager() {
         <div className="legend">
           <h4>Leyenda:</h4>
           <div className="legend-item">
-            <span className="legend-badge masculino">Masculino</span>
-            <span>Dispositivos diseñados para uso masculino</span>
+            <span className="legend-badge masculino">Externo</span>
+            <span>Dispositivos diseñados para uso externo</span>
           </div>
           <div className="legend-item">
-            <span className="legend-badge femenino">Femenino</span>
-            <span>Dispositivos diseñados para uso femenino</span>
+            <span className="legend-badge femenino">Interno</span>
+            <span>Dispositivos diseñados para uso interno</span>
           </div>
           <div className="legend-item">
             <span className="legend-badge universal">Universal</span>

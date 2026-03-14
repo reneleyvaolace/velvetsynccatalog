@@ -1,1 +1,0 @@
-const fs = require('fs'); const path = require('path'); const srcPath = '.tmp/compatible_devices.json'; const destPath = 'src/data/compatible_devices.json'; const content = fs.readFileSync(srcPath, 'utf8'); fs.writeFileSync(destPath, content); console.log('Copied! Size:', fs.statSync(destPath).size, 'Lines:', content.split('\n').length);  
