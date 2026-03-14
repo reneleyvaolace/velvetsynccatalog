@@ -1,10 +1,94 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { getDeviceImage, getDeviceQR, getDevicePDF } from '../utils/mediaUtils';
+import { getDeviceImage, getDeviceQR, getDevicePDF, getIconUrl } from '../utils/mediaUtils';
 import { translateFunction } from '../utils/translations';
-import velvetLogo from '../assets/velvet_sync/velvet_sync_logo_integrated.png';
+const GITHUB_BASE = 'https://raw.githubusercontent.com/reneleyvaolace/velvetsynccatalog/main/documentacion/docs';
+const velvetLogo = `${GITHUB_BASE}/logo_velvet.png`;
+
 import stealthIcon from '../assets/velvet_sync/stealth_icon.png';
+
 import './DeviceCatalog.css';
+
+// Mapa de iconos para funciones
+const FEATURE_MAP = {
+  // Principales
+  'classic': { label: 'Clásico', icon: 'icon_vibrator' },
+  'music': { label: 'Música', icon: 'icon_sync_music' },
+  'intera': { label: 'Interactivo', icon: 'icon_remote_partner' },
+  'finger': { label: 'Manual', icon: 'icon_motion_control' },
+  'video': { label: 'Video', icon: 'icon_video' },
+  'game': { label: 'Juegos', icon: 'icon_tab_games' },
+  'explore': { label: 'Explorar', icon: 'icon_explore' },
+  'shake': { label: 'Agitar', icon: 'icon_shake_mode' },
+  'heating': { label: 'Calor', icon: 'icon_heat' },
+  'kegel': { label: 'Ejercicios', icon: 'icon_kegel' },
+  'voice': { label: 'Voz', icon: 'icon_voice_control' },
+  'discharge': { label: 'Descarga', icon: 'icon_pulse_waves' },
+  'trends': { label: 'Tendencias', icon: 'icon_intensity' },
+  'ai_voice': { label: 'Voz IA', icon: 'icon_voice_control' },
+  'thrust': { label: 'Empuje', icon: 'icon_thrust' },
+  'suction': { label: 'Succión', icon: 'icon_suction' },
+  
+  // Audio & Video Sync
+  'audioplot': { label: 'Ritmo Audio', icon: 'icon_sync_music' },
+  'videoplot': { label: 'Ritmo Video', icon: 'icon_video' },
+  'video_voice': { label: 'Video Voz', icon: 'icon_voice_control' },
+  'video_wu': { label: 'Remix Video', icon: 'icon_video' },
+  'video2': { label: 'Video Pro', icon: 'icon_video' },
+  
+  // Modos y Juegos
+  'custom_mode': { label: 'Modo Propio', icon: 'icon_custom_pattern' },
+  'customer_game': { label: 'Mi Juego', icon: 'icon_tab_games' },
+  'game_roulette': { label: 'Ruleta', icon: 'icon_game_roulette' },
+  'fruit_game': { label: 'Frutas', icon: 'icon_fruit_game' },
+  'scene': { label: 'Escenas', icon: 'icon_explore' },
+  
+  // Entrenamiento y Salud
+  'tot': { label: 'Entrenar', icon: 'icon_kegel' },
+  'training': { label: 'Rutina', icon: 'icon_kegel' },
+  
+  // Otros
+  'sleep': { label: 'Sueño', icon: 'icon_vibrator' },
+  'strike': { label: 'Golpeo', icon: 'icon_pulse_waves' },
+  'switch_voice': { label: 'Cambiar Voz', icon: 'icon_voice_control' },
+  'voice_control': { label: 'Control Voz', icon: 'icon_voice_control' },
+  'remote_session': { label: 'Sesión Remota', icon: 'icon_remote_session' },
+  'bluetooth': { label: 'Bluetooth', icon: 'icon_bluetooth' }
+};
+
+
+
+/**
+ * Limpia y traduce una cadena de característica técnica
+ */
+const formatCapability = (raw) => {
+  if (!raw) return null;
+  
+  // 1. Limpiar JSON strings ("audioPlot": true)
+  let clean = raw.replace(/{|}|"/g, '');
+  let parts = clean.split(':');
+  let key = parts[0].trim().toLowerCase();
+  let value = parts[1] ? parts[1].trim() : 'true';
+
+  const mapping = FEATURE_MAP[key];
+  if (mapping) {
+    return {
+      label: mapping.label,
+      icon: mapping.icon,
+      active: value !== 'false'
+    };
+  }
+
+  return {
+    label: key,
+    icon: null,
+    active: value !== 'false'
+  };
+};
+
+
+
+
 
 /**
  * Velvet Sync Device Catalog
@@ -141,16 +225,49 @@ function DeviceCatalog() {
     fetchDevices();
   }, []);
 
-  // Get all unique features from all devices
+  // Get all unique features from all devices and clean them up
   const allFeatures = useMemo(() => {
     const featuresSet = new Set();
+    
     devices.forEach(device => {
-      if (device.motors && Array.isArray(device.motors)) {
-        device.motors.forEach(feature => featuresSet.add(feature));
-      }
+      if (!device.motors) return;
+
+      // Intentar procesar como array o string
+      const rawMotors = Array.isArray(device.motors) ? device.motors : [device.motors];
+
+      rawMotors.forEach(rawItem => {
+        if (!rawItem) return;
+
+        // Convertir a string si es objeto
+        let str = typeof rawItem === 'string' ? rawItem : JSON.stringify(rawItem);
+        
+        // 1. Limpiar caracteres JSON y pipes
+        // Esto manejará {"classic": true}, "classic: true", classic|music, etc.
+        let cleaned = str.replace(/{|}|"|\[|\]/g, '');
+        
+        // Split por pipe y por coma (por si viene JSON list)
+        const parts = cleaned.split(/[|,]/);
+        
+        parts.forEach(part => {
+          // Tomar solo la llave si es key:value
+          let key = part.split(':')[0].trim();
+          
+          // Filtrar basura y valores booleanos crudos
+          if (key && !['true', 'false', 'null', 'undefined'].includes(key.toLowerCase())) {
+            featuresSet.add(key);
+          }
+        });
+      });
     });
-    return Array.from(featuresSet).sort();
+
+    return Array.from(featuresSet).sort((a, b) => {
+      const labelA = FEATURE_MAP[a.toLowerCase()]?.label || a;
+      const labelB = FEATURE_MAP[b.toLowerCase()]?.label || b;
+      return labelA.localeCompare(labelB);
+    });
   }, [devices]);
+
+
 
   // Filter devices
   const filteredDevices = useMemo(() => {
@@ -500,17 +617,32 @@ function DeviceCatalog() {
         <div className="features-filter">
           <h3 className="features-filter-title">Filtrar por característica:</h3>
           <div className="features-list">
-            {allFeatures.map(feature => (
-              <button
-                key={feature}
-                className={`feature-filter-btn ${selectedFeatures.includes(feature) ? 'active' : ''}`}
-                onClick={() => toggleFeature(feature)}
-              >
-                {feature}
-              </button>
-            ))}
+            {allFeatures.map(feature => {
+              const mapping = FEATURE_MAP[feature.toLowerCase()];
+              const label = mapping ? mapping.label : feature;
+              const iconName = mapping ? mapping.icon : null;
+
+              return (
+                <button
+                  key={feature}
+                  className={`feature-filter-btn ${selectedFeatures.includes(feature) ? 'active' : ''}`}
+                  onClick={() => toggleFeature(feature)}
+                >
+                  {iconName && (
+                    <img 
+                      src={getIconUrl(iconName)} 
+                      className="feature-icon-mini" 
+                      alt="" 
+                      onError={(e) => e.target.style.display = 'none'}
+                    />
+                  )}
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
+
       </div>
 
       {/* Device Grid */}
@@ -570,7 +702,16 @@ function DeviceCatalog() {
                 <div className="device-info">
                   <div className="device-title-container">
                     <h3 className="device-title">{device.title}</h3>
+                    <div className="device-category-icons">
+                      {device.stimulation_icon_url && (
+                        <img src={device.stimulation_icon_url} className="cat-mini-icon" alt="stimulation" />
+                      )}
+                      {device.anatomy_icon_url && (
+                        <img src={device.anatomy_icon_url} className="cat-mini-icon" alt="anatomy" />
+                      )}
+                    </div>
                     {/* Tooltip con nombre original en chino */}
+
                     {getOriginalName(device.title) && (
                       <div className="original-name-tooltip">
                         <span className="tooltip-icon">🈯</span>
@@ -627,19 +768,36 @@ function DeviceCatalog() {
                   <div className="device-capabilities">
                     {device.motors && device.motors.length > 0 ? (
                       <div className="capability-badges">
-                        {device.motors.slice(0, 3).map((cap, idx) => (
-                          <span key={idx} className="capability-badge">
-                            {cap}
+                        {device.motors.slice(0, 4).map((cap, idx) => {
+                          const formatted = formatCapability(cap);
+                          if (!formatted) return null;
+                          // Solo mostramos las que son TRUE en la tarjeta de la galería para no saturar
+                          if (!formatted.active) return null;
+                          
+                          return (
+                            <span key={idx} className="capability-badge" title={formatted.label}>
+                              {formatted.icon && (
+                                <img 
+                                  src={getIconUrl(formatted.icon)} 
+                                  className="badge-icon-mini" 
+                                  alt="" 
+                                />
+                              )}
+                              {formatted.label}
+                            </span>
+                          );
+                        })}
+                        {device.motors.filter(c => formatCapability(c)?.active).length > 4 && (
+                          <span className="capability-badge more">
+                            +{device.motors.filter(c => formatCapability(c)?.active).length - 4}
                           </span>
-                        ))}
-                        {device.motors.length > 3 && (
-                          <span className="capability-badge more">+{device.motors.length - 3}</span>
                         )}
                       </div>
                     ) : (
                       <span className="no-capabilities">Sin características</span>
                     )}
                   </div>
+
 
                   {/* Connect Button */}
                   <button
@@ -651,8 +809,9 @@ function DeviceCatalog() {
                     }}
                     title={deviceAIReady ? 'Dispositivo compatible con IA - Click para Demo' : 'Vincular dispositivo'}
                   >
-                    <span className="btn-icon">{deviceAIReady ? '🤖' : '📡'}</span>
-                    {deviceAIReady ? 'Demo IA' : 'Vincular en Velvet Sync'}
+                    <span className="btn-icon">{deviceAIReady ? '✨' : '✦'}</span>
+                    {deviceAIReady ? 'Experiencia IA' : 'Descubre más'}
+
                   </button>
                 </div>
               </div>
@@ -836,16 +995,32 @@ function DeviceCatalog() {
                   <h3>Características / Capacidades</h3>
                   {selectedDevice.motors && selectedDevice.motors.length > 0 ? (
                     <div className="capability-tags">
-                      {selectedDevice.motors.map((cap, idx) => (
-                        <span key={idx} className="capability-tag">
-                          {cap}
-                        </span>
-                      ))}
+                      {selectedDevice.motors.map((cap, idx) => {
+                        const formatted = formatCapability(cap);
+                        if (!formatted) return null;
+                        
+                        return (
+                          <span 
+                            key={idx} 
+                            className={`capability-tag ${!formatted.active ? 'inactive' : ''}`}
+                          >
+                            {formatted.icon && (
+                              <img 
+                                src={getIconUrl(formatted.icon)} 
+                                className="cap-icon-mini" 
+                                alt="" 
+                              />
+                            )}
+                            {formatted.label}
+                          </span>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p>Sin capacidades detectadas</p>
                   )}
                 </div>
+
 
                 {/* Product Functions */}
                 {selectedDevice.productFuncs && selectedDevice.productFuncs.length > 0 && (
