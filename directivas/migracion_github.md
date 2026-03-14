@@ -1,5 +1,6 @@
 # Directiva: Migración de Archivos a GitHub
-## Versión: 1.0.0 | Última actualización: 2026-03-13
+## Versión: 1.1.0 | Última actualización: 2026-03-13
+
 
 ### Objetivo
 Migrar el almacenamiento y referencia de archivos multimedia (imágenes, QR, PDF) desde el sistema de archivos local (o almacenamiento de Supabase) hacia un repositorio público en GitHub para asegurar accesibilidad global y centralización.
@@ -35,6 +36,10 @@ Migrar el almacenamiento y referencia de archivos multimedia (imágenes, QR, PDF
 ### Historial de Aprendizaje
 - **Restricción**: El push inicial fue lento debido al volumen de archivos binarios (casi 600MB). Se debe monitorear el progreso del terminal.
 - **Nota**: El acceso a Supabase vía MCP puede estar restringido si el proyecto no está listado en la cuenta vinculada, por lo que se proporciona el script SQL para ejecución manual o vía panel de Supabase.
+- **Aprendizaje UI**: No usar `filter: invert(1)` en iconos con transparencia variable o bordes suavizados, ya que genera un efecto de "cuadro blanco". Usar `drop-shadow` y `brightness` para iluminar iconos sobre fondos magenta.
+- **Aprendizaje Datos**: El campo `motors` en la DB puede venir en múltiples formatos (String, Array, JSON, Pipe-separated). La limpieza debe ser recursiva y eliminar llaves/comillas para evitar mostrar código técnico al usuario.
+- **Diseño Persuasivo**: Cambiar textos técnicos como "Vincular" por "Descubrir más" aumenta la tasa de interacción del usuario.
+
 
 ### Verificación
 - Confirmar que las URLs de GitHub Raw son accesibles públicamente.
