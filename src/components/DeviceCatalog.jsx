@@ -155,6 +155,15 @@ function DeviceCatalog() {
     setIsMobileDevice(isMobile());
   }, []);
 
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation]);
+
   // AI-Ready devices (rMesh 11-byte protocol)
   const AI_READY_DEVICES = useMemo(() => new Set([
     8154,  // Caballero No. 3
@@ -359,7 +368,21 @@ function DeviceCatalog() {
     result.sort((a, b) => a.id - b.id);
 
     return result;
-  }, [devices, searchTerm, selectedFeatures, showAIFilter, AI_READY_DEVICES]);
+  }, [devices, searchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation]);
+
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredDevices.length / itemsPerPage);
+  const currentPageDevices = filteredDevices.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Page handlers
+  const goToPage = (page) => {
+    if (page < 1 || page > totalPages) return;
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Toggle feature filter
   const toggleFeature = (feature) => {
@@ -576,6 +599,24 @@ function DeviceCatalog() {
 
       {/* Search and Filters */}
       <div className="filters-section">
+        {/* Pagination Per Page Selector */}
+        <div className="pagination-per-page">
+          <label>📄 Mostrar:</label>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+          >
+            <option value={50}>50 dispositivos</option>
+            <option value={100}>100 dispositivos</option>
+            <option value={200}>200 dispositivos</option>
+            <option value={500}>500 dispositivos</option>
+          </select>
+          <span className="items-label">por página</span>
+        </div>
+
         {/* Taxonomy Filters */}
         <div className="taxonomy-filters">
           <h3 className="taxonomy-title">🔬 Taxonomía de Filtros Visuales</h3>
@@ -797,20 +838,24 @@ function DeviceCatalog() {
             </button>
           </div>
         ) : (
-          filteredDevices.map((device) => {
-            // Check for CH1/CH2 capabilities
-            const hasCH1 = device.motors?.includes('Canal 1') || device.funcObj?.CH1;
-            const hasCH2 = device.motors?.includes('Canal 2') || device.funcObj?.CH2;
-            const isDualChannel = hasCH1 && hasCH2;
-            const precision = device.isPrecise === 1 ? '0-255' : '0-100';
-            const deviceAIReady = isAIReady(device.id);
+          <div>
+            <div className="pagination-info">
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredDevices.length)} de {filteredDevices.length} dispositivos
+            </div>
+            {currentPageDevices.map((device) => {
+              // Check for CH1/CH2 capabilities
+              const hasCH1 = device.motors?.includes('Canal 1') || device.funcObj?.CH1;
+              const hasCH2 = device.motors?.includes('Canal 2') || device.funcObj?.CH2;
+              const isDualChannel = hasCH1 && hasCH2;
+              const precision = device.isPrecise === 1 ? '0-255' : '0-100';
+              const deviceAIReady = isAIReady(device.id);
 
-            return (
-              <div
-                key={device.id}
-                className={`device-card ${deviceAIReady ? 'ai-ready' : ''}`}
-                onClick={() => setSelectedDevice(device)}
-              >
+              return (
+                <div
+                  key={device.id}
+                  className={`device-card ${deviceAIReady ? 'ai-ready' : ''}`}
+                  onClick={() => setSelectedDevice(device)}
+                >
                 <div className="device-image-container">
                   {/* AI Impulse Badge */}
                   {deviceAIReady && (
@@ -965,9 +1010,38 @@ function DeviceCatalog() {
                 </div>
               </div>
             );
-          })
+          })}
+          </div>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="pagination-controls">
+          <button className="pagination-btn" onClick={() => goToPage(1)} disabled={currentPage === 1}>⏮</button>
+          <button className="pagination-btn" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>◀</button>
+          <div className="pagination-pages">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum;
+              if (totalPages <= 5) pageNum = i + 1;
+              else if (currentPage <= 3) pageNum = i + 1;
+              else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+              else pageNum = currentPage - 2 + i;
+              return (
+                <button
+                  key={pageNum}
+                  className={`pagination-page ${currentPage === pageNum ? 'active' : ''}`}
+                  onClick={() => goToPage(pageNum)}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+          <button className="pagination-btn" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>▶</button>
+          <button className="pagination-btn" onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages}>⏭</button>
+        </div>
+      )}
 
       {/* AI Demo Modal - VELVET LAB MODE */}
       {showAIDemo && selectedDevice && (
