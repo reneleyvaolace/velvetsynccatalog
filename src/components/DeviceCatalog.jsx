@@ -1408,7 +1408,7 @@ function DeviceCatalog() {
                 </div>
               ) : (
                 <iframe
-                  src={`${pdfUrl}#toolbar=0&view=FitH`}
+                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
                   title={pdfTitle}
                   width="100%"
                   height="100%"
