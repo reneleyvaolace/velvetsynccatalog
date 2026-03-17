@@ -398,32 +398,26 @@
    DEVICE GALLERY
    ============================================ */
 .device-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
   gap: 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
-}
-
-/* 3 columns on large screens */
-@media (min-width: 1200px) {
-  .device-gallery {
-    grid-template-columns: repeat(3, 1fr);
-  }
+  width: 100%;
 }
 
 /* 2 columns on medium screens */
-@media (min-width: 768px) and (max-width: 1199px) {
+@media (max-width: 1199px) {
   .device-gallery {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 
 /* 1 column on mobile */
 @media (max-width: 767px) {
   .device-gallery {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
     padding: 1rem;
     gap: 1.25rem;
   }
