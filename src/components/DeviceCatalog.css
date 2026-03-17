@@ -395,7 +395,7 @@
 
 
 /* ============================================
-   DEVICE GALLERY
+   DEVICE GALLERY - v2 FIX
    ============================================ */
 .device-gallery {
   display: grid !important;
@@ -405,6 +405,7 @@
   margin: 0 auto;
   padding: 2rem;
   width: 100%;
+  box-sizing: border-box;
 }
 
 /* 2 columns on medium screens */
