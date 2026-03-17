@@ -838,7 +838,7 @@ function DeviceCatalog() {
             </button>
           </div>
         ) : (
-          <div>
+          <>
             <div className="pagination-info">
               Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredDevices.length)} de {filteredDevices.length} dispositivos
             </div>
@@ -1011,7 +1011,7 @@ function DeviceCatalog() {
               </div>
             );
           })}
-          </div>
+          </>
         )}
       </div>
 
