@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
 import { supabase } from '../lib/supabase';
 import { getDeviceImage, getDeviceQR, getDevicePDF, getIconUrl } from '../utils/mediaUtils';
 import { translateFunction } from '../utils/translations';
@@ -852,7 +852,7 @@ function DeviceCatalog() {
                 <div
                   key={device.id}
                   className={`device-card ${deviceAIReady ? 'ai-ready' : ''}`}
-                  onClick={() => setSelectedDevice(device)}
+                  onClick={() => startTransition(() => setSelectedDevice(device))}
                 >
                   <div className="device-image-container">
                     {deviceAIReady && (
@@ -984,7 +984,7 @@ function DeviceCatalog() {
                           if (deviceAIReady) {
                             startAIDemo(device);
                           } else {
-                            setSelectedDevice(device);
+                            startTransition(() => setSelectedDevice(device));
                           }
                         }}
                       >
@@ -1162,9 +1162,9 @@ function DeviceCatalog() {
 
       {/* Device Detail Modal (non-AI) */}
       {!showAIDemo && selectedDevice && (
-        <div className="device-modal-overlay" onClick={() => setSelectedDevice(null)}>
+        <div className="device-modal-overlay" onClick={() => startTransition(() => setSelectedDevice(null))}>
           <div className="device-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="device-modal-close" onClick={() => setSelectedDevice(null)}>
+            <button className="device-modal-close" onClick={() => startTransition(() => setSelectedDevice(null))}>
               &times;
             </button>
 
