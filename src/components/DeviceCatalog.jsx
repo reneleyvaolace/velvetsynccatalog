@@ -1328,14 +1328,6 @@ function DeviceCatalog() {
                 <div className="device-modal-docs">
                   <h3>📚 Documentación</h3>
                   <div className="docs-links">
-                    {selectedDevice.manualUrl && (
-                      <button
-                        onClick={() => openPdfViewer(selectedDevice.manualUrl, `Manual - ${selectedDevice.title}`)}
-                        className="doc-link manual"
-                      >
-                        📖 Manual de Usuario
-                      </button>
-                    )}
                     {selectedDevice.techSheetUrl && (
                       <button
                         onClick={() => openPdfViewer(selectedDevice.techSheetUrl, `Ficha Técnica - ${selectedDevice.title}`)}
