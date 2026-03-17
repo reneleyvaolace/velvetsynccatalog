@@ -141,11 +141,16 @@ function DeviceCatalog() {
 
   // AI Demo Modal states
   const [showAIDemo, setShowAIDemo] = useState(false);
-  const [aiDemoState, setAiDemoState] = useState('idle'); // idle, speaking, testing, complete
+  const [aiDemoState, setAiDemoState] = useState('idle');
   const [aiMessage, setAiMessage] = useState('');
   const [testProgress, setTestProgress] = useState(0);
   const [testLog, setTestLog] = useState([]);
   const testTimerRef = useRef(null);
+
+  // PDF Viewer Modal state
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState('');
+  const [pdfTitle, setPdfTitle] = useState('');
 
   // Mobile app detection state
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -545,6 +550,19 @@ function DeviceCatalog() {
       `Tu ${selectedDevice.title} (SN: ${selectedDevice.id}) recibirá la configuración en cuanto abras la app móvil.`
     );
   };
+
+  // Open PDF in modal viewer
+  const openPdfViewer = useCallback((url, title) => {
+    setPdfUrl(url);
+    setPdfTitle(title);
+    setShowPdfViewer(true);
+  }, []);
+
+  const closePdfViewer = useCallback(() => {
+    setShowPdfViewer(false);
+    setPdfUrl('');
+    setPdfTitle('');
+  }, []);
 
   if (loading) {
     return (
@@ -1309,34 +1327,28 @@ function DeviceCatalog() {
                   <h3>📚 Documentación</h3>
                   <div className="docs-links">
                     {selectedDevice.manualUrl && (
-                      <a
-                        href={selectedDevice.manualUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openPdfViewer(selectedDevice.manualUrl, `Manual - ${selectedDevice.title}`)}
                         className="doc-link manual"
                       >
                         📖 Manual de Usuario
-                      </a>
+                      </button>
                     )}
                     {selectedDevice.techSheetUrl && (
-                      <a
-                        href={selectedDevice.techSheetUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openPdfViewer(selectedDevice.techSheetUrl, `Ficha Técnica - ${selectedDevice.title}`)}
                         className="doc-link tech-sheet"
                       >
                         📋 Ficha Técnica
-                      </a>
+                      </button>
                     )}
                     {selectedDevice.qrcode && (
-                      <a
-                        href={selectedDevice.qrcode}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => openPdfViewer(selectedDevice.qrcode, `QR Code - ${selectedDevice.title}`)}
                         className="doc-link qr-code"
                       >
                         📱 Ver QR Code
-                      </a>
+                      </button>
                     )}
                   </div>
                   <p className="docs-note">
@@ -1357,6 +1369,37 @@ function DeviceCatalog() {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PDF Viewer Modal */}
+      {showPdfViewer && (
+        <div className="pdf-viewer-overlay" onClick={closePdfViewer}>
+          <div className="pdf-viewer-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="pdf-viewer-close" onClick={closePdfViewer}>
+              &times;
+            </button>
+            <div className="pdf-viewer-header">
+              <h3>{pdfTitle}</h3>
+              <a
+                href={pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pdf-download-btn"
+              >
+                ⬇️ Descargar
+              </a>
+            </div>
+            <div className="pdf-viewer-content">
+              <iframe
+                src={pdfUrl}
+                title={pdfTitle}
+                width="100%"
+                height="100%"
+                style={{ border: 'none' }}
+              />
             </div>
           </div>
         </div>
