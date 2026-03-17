@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, memo } from 'react';
 import { supabase } from '../lib/supabase';
 import { getDeviceImage, getDeviceQR, getDevicePDF, getIconUrl } from '../utils/mediaUtils';
 import { translateFunction } from '../utils/translations';
@@ -118,6 +118,168 @@ const TAXONOMY_OPTIONS = {
     { value: 'interactive', label: 'Interactivo', icon: 'icon_remote_partner' }
   ]
 };
+
+/**
+ * Device Card Component - Memoized for performance
+ */
+const DeviceCard = memo(function DeviceCard({ device, isAIReady, getOriginalName, onCardClick, onDemoClick }) {
+  const hasCH1 = device.motors?.includes('Canal 1') || device.funcObj?.CH1;
+  const hasCH2 = device.motors?.includes('Canal 2') || device.funcObj?.CH2;
+  const isDualChannel = hasCH1 && hasCH2;
+  const precision = device.isPrecise === 1 ? '0-255' : '0-100';
+  const deviceAIReady = isAIReady(device.id);
+
+  return (
+    <div
+      className={`device-card ${deviceAIReady ? 'ai-ready' : ''}`}
+      onClick={() => onCardClick(device)}
+    >
+      <div className="device-image-container">
+        {deviceAIReady && (
+          <div className="ai-impulse-badge">
+            <span className="badge-text">AI IMPULSE VERIFIED</span>
+            <div className="badge-glow"></div>
+            <div className="ai-tooltip">
+              <p>Este dispositivo permite la sincronización milimétrica con el análisis de sentimientos de Velvet Sync.</p>
+              <p className="tooltip-tech">Soporta control de precisión 0-255 y ráfagas temporales por palabra clave.</p>
+            </div>
+          </div>
+        )}
+
+        <img
+          src={device.pics}
+          alt={device.title}
+          className="device-image"
+          onError={(e) => {
+            e.target.src = '/images/placeholder-device.svg';
+          }}
+          loading="lazy"
+        />
+        <div className="device-overlay">
+          <span className="device-id-badge">#{device.id}</span>
+        </div>
+      </div>
+
+      <div className="device-info">
+        <div className="device-title-container">
+          <h3 className="device-title">{device.title}</h3>
+          <div className="device-category-icons">
+            {device.stimulation_icon_url && (
+              <img src={device.stimulation_icon_url} className="cat-mini-icon" alt="stimulation" />
+            )}
+            {device.anatomy_icon_url && (
+              <img src={device.anatomy_icon_url} className="cat-mini-icon" alt="anatomy" />
+            )}
+          </div>
+
+          {getOriginalName(device.title) && (
+            <div className="original-name-tooltip">
+              <span className="tooltip-icon">🈯</span>
+              <div className="tooltip-content">
+                <p className="tooltip-note">Nombre traducido del chino</p>
+                <p className="tooltip-original">Original: <strong>{getOriginalName(device.title)}</strong></p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {deviceAIReady && (
+          <div className="ai-tech-description">
+            <span className="tech-icon">⚡</span>
+            Soporta control de precisión 0-255 y ráfagas temporales por palabra clave
+          </div>
+        )}
+
+        <div className="device-tech-specs">
+          <div className="tech-spec">
+            <span className="spec-label">Channel Logic:</span>
+            <span className={`spec-value ${isDualChannel ? 'dual' : 'single'}`}>
+              {isDualChannel ? 'Dual Channel' : 'Single Channel'}
+            </span>
+          </div>
+          <div className="tech-spec">
+            <span className="spec-label">Precisión:</span>
+            <span className="spec-value">{precision}</span>
+          </div>
+        </div>
+
+        <div className="channel-pills">
+          {hasCH1 && (
+            <span className="channel-pill ch1">
+              <span className="pill-dot"></span>
+              CH1
+            </span>
+          )}
+          {hasCH2 && (
+            <span className="channel-pill ch2">
+              <span className="pill-dot"></span>
+              CH2
+            </span>
+          )}
+          {!hasCH1 && !hasCH2 && (
+            <span className="channel-pill standard">Standard</span>
+          )}
+        </div>
+
+        <div className="device-capabilities">
+          {device.motors && device.motors.length > 0 ? (
+            <div className="capability-badges">
+              {device.motors
+                .map(c => {
+                  const formatted = typeof c === 'string' ? { label: c, icon: null, active: true } : formatCapability(c);
+                  if (!formatted || !formatted.active) return null;
+                  return (
+                    <span key={c} className="capability-badge" title={formatted.label}>
+                      {formatted.icon && (
+                        <img
+                          src={getIconUrl(formatted.icon)}
+                          className="badge-icon-mini"
+                          alt=""
+                        />
+                      )}
+                      {formatted.label}
+                    </span>
+                  );
+                })
+                .filter(Boolean)
+                .slice(0, 4)}
+              {device.motors.filter(c => {
+                const f = typeof c === 'string' ? { active: true } : formatCapability(c);
+                return f?.active;
+              }).length > 4 && (
+                <span className="capability-badge more">
+                  +{device.motors.filter(c => {
+                    const f = typeof c === 'string' ? { active: true } : formatCapability(c);
+                    return f?.active;
+                  }).length - 4}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span className="no-capabilities">Sin características</span>
+          )}
+        </div>
+
+        <div className="device-actions">
+          <button
+            className={`connect-btn ${deviceAIReady ? 'ai-lab-trigger' : ''}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (deviceAIReady) {
+                onDemoClick(device);
+              } else {
+                onCardClick(device);
+              }
+            }}
+          >
+            <span className="btn-icon">{deviceAIReady ? '🧠' : '✦'}</span>
+            {deviceAIReady ? 'Laboratorio IA' : 'Especificaciones'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 /**
  * Velvet Sync Device Catalog
@@ -842,175 +1004,16 @@ function DeviceCatalog() {
             <div className="pagination-info">
               Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredDevices.length)} de {filteredDevices.length} dispositivos
             </div>
-            {currentPageDevices.map((device) => {
-              // Check for CH1/CH2 capabilities
-              const hasCH1 = device.motors?.includes('Canal 1') || device.funcObj?.CH1;
-              const hasCH2 = device.motors?.includes('Canal 2') || device.funcObj?.CH2;
-              const isDualChannel = hasCH1 && hasCH2;
-              const precision = device.isPrecise === 1 ? '0-255' : '0-100';
-              const deviceAIReady = isAIReady(device.id);
-
-              return (
-                <div
-                  key={device.id}
-                  className={`device-card ${deviceAIReady ? 'ai-ready' : ''}`}
-                  onClick={() => setSelectedDevice(device)}
-                >
-                <div className="device-image-container">
-                  {/* AI Impulse Badge */}
-                  {deviceAIReady && (
-                    <div className="ai-impulse-badge">
-                      <span className="badge-text">AI IMPULSE VERIFIED</span>
-                      <div className="badge-glow"></div>
-                      {/* Tooltip */}
-                      <div className="ai-tooltip">
-                        <p>Este dispositivo permite la sincronización milimétrica con el análisis de sentimientos de Velvet Sync.</p>
-                        <p className="tooltip-tech">Soporta control de precisión 0-255 y ráfagas temporales por palabra clave.</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <img
-                    src={device.pics}
-                    alt={device.title}
-                    className="device-image"
-                    onError={(e) => {
-                      // Fallback a placeholder local si falla la URL externa
-                      e.target.src = '/images/placeholder-device.svg';
-                    }}
-                    loading="lazy"
-                  />
-                  <div className="device-overlay">
-                    <span className="device-id-badge">#{device.id}</span>
-                  </div>
-                </div>
-
-                <div className="device-info">
-                  <div className="device-title-container">
-                    <h3 className="device-title">{device.title}</h3>
-                    <div className="device-category-icons">
-                      {device.stimulation_icon_url && (
-                        <img src={device.stimulation_icon_url} className="cat-mini-icon" alt="stimulation" />
-                      )}
-                      {device.anatomy_icon_url && (
-                        <img src={device.anatomy_icon_url} className="cat-mini-icon" alt="anatomy" />
-                      )}
-                    </div>
-                    {/* Tooltip con nombre original en chino */}
-
-                    {getOriginalName(device.title) && (
-                      <div className="original-name-tooltip">
-                        <span className="tooltip-icon">🈯</span>
-                        <div className="tooltip-content">
-                          <p className="tooltip-note">Nombre traducido del chino</p>
-                          <p className="tooltip-original">Original: <strong>{getOriginalName(device.title)}</strong></p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* AI Technical Description */}
-                  {deviceAIReady && (
-                    <div className="ai-tech-description">
-                      <span className="tech-icon">⚡</span>
-                      Soporta control de precisión 0-255 y ráfagas temporales por palabra clave
-                    </div>
-                  )}
-
-                  {/* Technical Specs */}
-                  <div className="device-tech-specs">
-                    <div className="tech-spec">
-                      <span className="spec-label">Channel Logic:</span>
-                      <span className={`spec-value ${isDualChannel ? 'dual' : 'single'}`}>
-                        {isDualChannel ? 'Dual Channel' : 'Single Channel'}
-                      </span>
-                    </div>
-                    <div className="tech-spec">
-                      <span className="spec-label">Precisión:</span>
-                      <span className="spec-value">{precision}</span>
-                    </div>
-                  </div>
-
-                  {/* Channel Pills */}
-                  <div className="channel-pills">
-                    {hasCH1 && (
-                      <span className="channel-pill ch1">
-                        <span className="pill-dot"></span>
-                        CH1
-                      </span>
-                    )}
-                    {hasCH2 && (
-                      <span className="channel-pill ch2">
-                        <span className="pill-dot"></span>
-                        CH2
-                      </span>
-                    )}
-                    {!hasCH1 && !hasCH2 && (
-                      <span className="channel-pill standard">Standard</span>
-                    )}
-                  </div>
-
-                  {/* Features */}
-                  <div className="device-capabilities">
-                    {device.motors && device.motors.length > 0 ? (
-                      <div className="capability-badges">
-                        {device.motors
-                          .flatMap(m => typeof m === 'string' ? m.split(/[|,;]/) : m)
-                          .map(f => f.trim())
-                          .filter(Boolean)
-                          .slice(0, 5)
-                          .map((cap, idx) => {
-                            const formatted = formatCapability(cap);
-                          if (!formatted) return null;
-                          // Solo mostramos las que son TRUE en la tarjeta de la galería para no saturar
-                          if (!formatted.active) return null;
-                          
-                          return (
-                            <span key={idx} className="capability-badge" title={formatted.label}>
-                              {formatted.icon && (
-                                <img 
-                                  src={getIconUrl(formatted.icon)} 
-                                  className="badge-icon-mini" 
-                                  alt="" 
-                                />
-                              )}
-                              {formatted.label}
-                            </span>
-                          );
-                        })}
-                        {device.motors.filter(c => formatCapability(c)?.active).length > 4 && (
-                          <span className="capability-badge more">
-                            +{device.motors.filter(c => formatCapability(c)?.active).length - 4}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="no-capabilities">Sin características</span>
-                    )}
-                  </div>
-
-
-                  {/* Connect Button */}
-                  <div className="device-actions">
-                    <button
-                      className={`connect-btn ${deviceAIReady ? 'ai-lab-trigger' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (deviceAIReady) {
-                          startAIDemo(device);
-                        } else {
-                          setSelectedDevice(device);
-                        }
-                      }}
-                    >
-                      <span className="btn-icon">{deviceAIReady ? '🧠' : '✦'}</span>
-                      {deviceAIReady ? 'Laboratorio IA' : 'Especificaciones'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+            {currentPageDevices.map((device) => (
+              <DeviceCard
+                key={device.id}
+                device={device}
+                isAIReady={isAIReady}
+                getOriginalName={getOriginalName}
+                onCardClick={setSelectedDevice}
+                onDemoClick={startAIDemo}
+              />
+            ))}
           </>
         )}
       </div>
