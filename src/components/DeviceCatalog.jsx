@@ -151,6 +151,7 @@ function DeviceCatalog() {
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [pdfTitle, setPdfTitle] = useState('');
+  const [pdfType, setPdfType] = useState('pdf'); // 'pdf' or 'image'
 
   // Mobile app detection state
   const [isMobileDevice, setIsMobileDevice] = useState(false);
@@ -551,10 +552,11 @@ function DeviceCatalog() {
     );
   };
 
-  // Open PDF in modal viewer
-  const openPdfViewer = useCallback((url, title) => {
+  // Open PDF/Image in modal viewer
+  const openPdfViewer = useCallback((url, title, type = 'pdf') => {
     setPdfUrl(url);
     setPdfTitle(title);
+    setPdfType(type);
     setShowPdfViewer(true);
   }, []);
 
@@ -1344,7 +1346,7 @@ function DeviceCatalog() {
                     )}
                     {selectedDevice.qrcode && (
                       <button
-                        onClick={() => openPdfViewer(selectedDevice.qrcode, `QR Code - ${selectedDevice.title}`)}
+                        onClick={() => openPdfViewer(selectedDevice.qrcode, `QR Code - ${selectedDevice.title}`, 'image')}
                         className="doc-link qr-code"
                       >
                         📱 Ver QR Code
@@ -1393,13 +1395,34 @@ function DeviceCatalog() {
               </a>
             </div>
             <div className="pdf-viewer-content">
-              <iframe
-                src={pdfUrl}
-                title={pdfTitle}
-                width="100%"
-                height="100%"
-                style={{ border: 'none' }}
-              />
+              {pdfType === 'image' ? (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#0A0A0A'
+                }}>
+                  <img
+                    src={pdfUrl}
+                    alt={pdfTitle}
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
+                </div>
+              ) : (
+                <iframe
+                  src={`${pdfUrl}#toolbar=0&view=FitH`}
+                  title={pdfTitle}
+                  width="100%"
+                  height="100%"
+                  style={{ border: 'none' }}
+                />
+              )}
             </div>
           </div>
         </div>
