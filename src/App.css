@@ -5,11 +5,11 @@
 .app {
   min-height: 100vh;
   background: var(--velvet-black);
+  width: 100%;
 }
 
 #root {
   width: 100%;
-  max-width: 100%;
   margin: 0;
   padding: 0;
 }
