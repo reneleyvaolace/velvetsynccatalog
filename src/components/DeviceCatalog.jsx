@@ -568,7 +568,7 @@ function DeviceCatalog() {
   }
 
   return (
-    <div className="velvet-catalog">
+    <div className="velvet-catalog" style={{ width: '100%', minWidth: '100vw' }}>
       {/* Hero Section */}
       <header className="velvet-hero">
         <div className="hero-glow"></div>
