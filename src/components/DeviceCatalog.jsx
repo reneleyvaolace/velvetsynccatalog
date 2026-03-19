@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo, useRef, useCallback, startTransition } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, startTransition, memo } from 'react';
 import { supabase } from '../lib/supabase';
 import { getDeviceImage, getDeviceQR, getDevicePDF, getIconUrl } from '../utils/mediaUtils';
-import { translateFunction } from '../utils/translations';
 import { isMobile, openNativeApp, buildDeepLink } from '../utils/deepLinking';
+import { useDebounce } from '../hooks/usePerformance';
+import { DeviceCard } from './DeviceCard';
+import { Virtuoso } from 'react-virtuoso';
 const GITHUB_BASE = 'https://raw.githubusercontent.com/reneleyvaolace/velvetsynccatalog/main/documentacion/docs';
 const velvetLogo = `${GITHUB_BASE}/logo_velvet.png`;
 
@@ -131,6 +133,7 @@ function DeviceCatalog() {
 
   // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [selectedFeatures, setSelectedFeatures] = useState([]);
   const [showAIFilter, setShowAIFilter] = useState(false);
 
@@ -323,7 +326,7 @@ function DeviceCatalog() {
 
 
 
-  // Filter devices
+  // Filter devices - optimized with debounced search
   const filteredDevices = useMemo(() => {
     let result = [...devices];
 
@@ -334,26 +337,20 @@ function DeviceCatalog() {
 
     // Taxonomy filters
     if (selectedUsageType) {
-      result = result.filter(device =>
-        device.usage_type === selectedUsageType
-      );
+      result = result.filter(device => device.usage_type === selectedUsageType);
     }
 
     if (selectedAnatomy) {
-      result = result.filter(device =>
-        device.target_anatomy === selectedAnatomy
-      );
+      result = result.filter(device => device.target_anatomy === selectedAnatomy);
     }
 
     if (selectedStimulation) {
-      result = result.filter(device =>
-        device.stimulation_type === selectedStimulation
-      );
+      result = result.filter(device => device.stimulation_type === selectedStimulation);
     }
 
-    // Filter by search term
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
+    // Filter by debounced search term
+    if (debouncedSearchTerm.trim()) {
+      const term = debouncedSearchTerm.toLowerCase().trim();
       result = result.filter(device =>
         device.title.toLowerCase().includes(term) ||
         device.barcode.toLowerCase().includes(term) ||
@@ -364,9 +361,7 @@ function DeviceCatalog() {
     // Filter by selected features
     if (selectedFeatures.length > 0) {
       result = result.filter(device =>
-        device.motors && device.motors.some(feature =>
-          selectedFeatures.includes(feature)
-        )
+        device.motors && device.motors.some(feature => selectedFeatures.includes(feature))
       );
     }
 
@@ -374,7 +369,7 @@ function DeviceCatalog() {
     result.sort((a, b) => a.id - b.id);
 
     return result;
-  }, [devices, searchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation]);
+  }, [devices, debouncedSearchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation]);
 
   // Pagination calculation
   const totalPages = Math.ceil(filteredDevices.length / itemsPerPage);
@@ -846,7 +841,7 @@ function DeviceCatalog() {
 
       </div>
 
-      {/* Device Grid */}
+      {/* Device Grid with Virtuoso Virtualization */}
       <div className="device-gallery">
         {filteredDevices.length === 0 ? (
           <div className="no-results">
@@ -861,161 +856,21 @@ function DeviceCatalog() {
             <div className="pagination-info">
               Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredDevices.length)} de {filteredDevices.length} dispositivos
             </div>
-            {currentPageDevices.map((device) => {
-              const hasCH1 = device.motors?.includes('Canal 1') || device.funcObj?.CH1;
-              const hasCH2 = device.motors?.includes('Canal 2') || device.funcObj?.CH2;
-              const isDualChannel = hasCH1 && hasCH2;
-              const precision = device.isPrecise === 1 ? '0-255' : '0-100';
-              const deviceAIReady = isAIReady(device.id);
-
-              return (
-                <div
+            <Virtuoso
+              style={{ height: 'calc(100vh - 500px)', minHeight: '400px' }}
+              data={currentPageDevices}
+              itemContent={(index, device) => (
+                <DeviceCard
                   key={device.id}
-                  className={`device-card ${deviceAIReady ? 'ai-ready' : ''}`}
-                  onClick={() => startTransition(() => setSelectedDevice(device))}
-                >
-                  <div className="device-image-container">
-                    {deviceAIReady && (
-                      <div className="ai-impulse-badge">
-                        <span className="badge-text">AI IMPULSE VERIFIED</span>
-                        <div className="badge-glow"></div>
-                        <div className="ai-tooltip">
-                          <p>Este dispositivo permite la sincronización milimétrica con el análisis de sentimientos de Velvet Sync.</p>
-                          <p className="tooltip-tech">Soporta control de precisión 0-255 y ráfagas temporales por palabra clave.</p>
-                        </div>
-                      </div>
-                    )}
-
-                    <img
-                      src={device.pics}
-                      alt={device.title}
-                      className="device-image"
-                      onError={(e) => {
-                        e.target.src = '/images/placeholder-device.svg';
-                      }}
-                      loading="lazy"
-                    />
-                    <div className="device-overlay">
-                      <span className="device-id-badge">#{device.id}</span>
-                    </div>
-                  </div>
-
-                  <div className="device-info">
-                    <div className="device-title-container">
-                      <h3 className="device-title">{device.title}</h3>
-                      <div className="device-category-icons">
-                        {device.stimulation_icon_url && (
-                          <img src={device.stimulation_icon_url} className="cat-mini-icon" alt="stimulation" />
-                        )}
-                        {device.anatomy_icon_url && (
-                          <img src={device.anatomy_icon_url} className="cat-mini-icon" alt="anatomy" />
-                        )}
-                      </div>
-
-                      {getOriginalName(device.title) && (
-                        <div className="original-name-tooltip">
-                          <span className="tooltip-icon">🈯</span>
-                          <div className="tooltip-content">
-                            <p className="tooltip-note">Nombre traducido del chino</p>
-                            <p className="tooltip-original">Original: <strong>{getOriginalName(device.title)}</strong></p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {deviceAIReady && (
-                      <div className="ai-tech-description">
-                        <span className="tech-icon">⚡</span>
-                        Soporta control de precisión 0-255 y ráfagas temporales por palabra clave
-                      </div>
-                    )}
-
-                    <div className="device-tech-specs">
-                      <div className="tech-spec">
-                        <span className="spec-label">Channel Logic:</span>
-                        <span className={`spec-value ${isDualChannel ? 'dual' : 'single'}`}>
-                          {isDualChannel ? 'Dual Channel' : 'Single Channel'}
-                        </span>
-                      </div>
-                      <div className="tech-spec">
-                        <span className="spec-label">Precisión:</span>
-                        <span className="spec-value">{precision}</span>
-                      </div>
-                    </div>
-
-                    <div className="channel-pills">
-                      {hasCH1 && (
-                        <span className="channel-pill ch1">
-                          <span className="pill-dot"></span>
-                          CH1
-                        </span>
-                      )}
-                      {hasCH2 && (
-                        <span className="channel-pill ch2">
-                          <span className="pill-dot"></span>
-                          CH2
-                        </span>
-                      )}
-                      {!hasCH1 && !hasCH2 && (
-                        <span className="channel-pill standard">Standard</span>
-                      )}
-                    </div>
-
-                    <div className="device-capabilities">
-                      {device.motors && device.motors.length > 0 ? (
-                        <div className="capability-badges">
-                          {device.motors
-                            .flatMap(m => typeof m === 'string' ? m.split(/[|,;]/) : m)
-                            .map(f => f.trim())
-                            .filter(Boolean)
-                            .slice(0, 4)
-                            .map((cap, idx) => {
-                              const formatted = formatCapability(cap);
-                              if (!formatted || !formatted.active) return null;
-                              return (
-                                <span key={idx} className="capability-badge" title={formatted.label}>
-                                  {formatted.icon && (
-                                    <img
-                                      src={getIconUrl(formatted.icon)}
-                                      className="badge-icon-mini"
-                                      alt=""
-                                    />
-                                  )}
-                                  {formatted.label}
-                                </span>
-                              );
-                            })}
-                          {device.motors.filter(c => formatCapability(c)?.active).length > 4 && (
-                            <span className="capability-badge more">
-                              +{device.motors.filter(c => formatCapability(c)?.active).length - 4}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="no-capabilities">Sin características</span>
-                      )}
-                    </div>
-
-                    <div className="device-actions">
-                      <button
-                        className={`connect-btn ${deviceAIReady ? 'ai-lab-trigger' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (deviceAIReady) {
-                            startAIDemo(device);
-                          } else {
-                            startTransition(() => setSelectedDevice(device));
-                          }
-                        }}
-                      >
-                        <span className="btn-icon">{deviceAIReady ? '🧠' : '✦'}</span>
-                        {deviceAIReady ? 'Laboratorio IA' : 'Especificaciones'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                  device={device}
+                  isAIReady={isAIReady}
+                  onStartAIDemo={startAIDemo}
+                  onSelectDevice={setSelectedDevice}
+                />
+              )}
+              overscan={200}
+              increaseViewportBy={500}
+            />
           </>
         )}
       </div>
