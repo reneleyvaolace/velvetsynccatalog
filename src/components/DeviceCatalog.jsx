@@ -1,101 +1,24 @@
-import { useState, useEffect, useMemo, useRef, useCallback, startTransition, memo } from 'react';
+import { useState, useEffect, useMemo, useCallback, startTransition, useDeferredValue } from 'react';
 import { supabase } from '../lib/supabase';
 import { getDeviceImage, getDeviceQR, getDevicePDF, getIconUrl } from '../utils/mediaUtils';
-import { isMobile, openNativeApp, buildDeepLink } from '../utils/deepLinking';
+import { isMobile } from '../utils/deepLinking';
 import { useDebounce } from '../hooks/usePerformance';
+import { FEATURE_MAP } from '../utils/deviceFeatures';
+import { GITHUB_BASE } from '../config/constants';
 import { DeviceCard } from './DeviceCard';
-import { Virtuoso } from 'react-virtuoso';
-const GITHUB_BASE = 'https://raw.githubusercontent.com/reneleyvaolace/velvetsynccatalog/main/documentacion/docs';
-const velvetLogo = `${GITHUB_BASE}/logo_velvet.png`;
+import DeviceModal from './DeviceModal';
+import AIDemoModal from './AIDemoModal';
+import PDFViewerModal from './PDFViewerModal';
 
-import stealthIcon from '../assets/velvet_sync/stealth_icon.png';
+const STIM_ALIASES = {
+  intera: 'interactive'
+};
+
+
+const velvetLogo = `${GITHUB_BASE}/logo_velvet.png`;
 
 import './DeviceCatalog.css';
 
-// Mapa de iconos para funciones
-const FEATURE_MAP = {
-  // Principales
-  'classic': { label: 'Clásico', icon: 'icon_vibrator' },
-  'music': { label: 'Música', icon: 'icon_sync_music' },
-  'intera': { label: 'Interactivo', icon: 'icon_remote_partner' },
-  'finger': { label: 'Manual', icon: 'icon_motion_control' },
-  'video': { label: 'Video', icon: 'icon_video' },
-  'game': { label: 'Juegos', icon: 'icon_tab_games' },
-  'explore': { label: 'Explorar', icon: 'icon_explore' },
-  'shake': { label: 'Agitar', icon: 'icon_shake_mode' },
-  'heating': { label: 'Calor', icon: 'icon_heat' },
-  'kegel': { label: 'Ejercicios', icon: 'icon_kegel' },
-  'voice': { label: 'Voz', icon: 'icon_voice_control' },
-  'discharge': { label: 'Descarga', icon: 'icon_pulse_waves' },
-  'trends': { label: 'Tendencias', icon: 'icon_intensity' },
-  'ai_voice': { label: 'Voz IA', icon: 'icon_voice_control' },
-  'thrust': { label: 'Empuje', icon: 'icon_thrust' },
-  'suction': { label: 'Succión', icon: 'icon_suction' },
-  
-  // Audio & Video Sync
-  'audioplot': { label: 'Ritmo Audio', icon: 'icon_sync_music' },
-  'videoplot': { label: 'Ritmo Video', icon: 'icon_video' },
-  'video_voice': { label: 'Video Voz', icon: 'icon_voice_control' },
-  'video_wu': { label: 'Remix Video', icon: 'icon_video' },
-  'video2': { label: 'Video Pro', icon: 'icon_video' },
-  
-  // Modos y Juegos
-  'custom_mode': { label: 'Modo Propio', icon: 'icon_custom_pattern' },
-  'customer_game': { label: 'Mi Juego', icon: 'icon_tab_games' },
-  'game_roulette': { label: 'Ruleta', icon: 'icon_game_roulette' },
-  'fruit_game': { label: 'Frutas', icon: 'icon_fruit_game' },
-  'scene': { label: 'Escenas', icon: 'icon_explore' },
-  
-  // Entrenamiento y Salud
-  'tot': { label: 'Entrenar', icon: 'icon_kegel' },
-  'training': { label: 'Rutina', icon: 'icon_kegel' },
-  
-  // Otros
-  'sleep': { label: 'Sueño', icon: 'icon_vibrator' },
-  'strike': { label: 'Golpeo', icon: 'icon_pulse_waves' },
-  'switch_voice': { label: 'Cambiar Voz', icon: 'icon_voice_control' },
-  'voice_control': { label: 'Control Voz', icon: 'icon_voice_control' },
-  'remote_session': { label: 'Sesión Remota', icon: 'icon_remote_session' },
-  'bluetooth': { label: 'Bluetooth', icon: 'icon_bluetooth' }
-};
-
-
-
-/**
- * Limpia y traduce una cadena de característica técnica
- */
-const formatCapability = (raw) => {
-  if (!raw) return null;
-  
-  // 1. Limpiar JSON strings ("audioPlot": true)
-  let clean = raw.replace(/{|}|"/g, '');
-  let parts = clean.split(':');
-  let key = parts[0].trim().toLowerCase();
-  let value = parts[1] ? parts[1].trim() : 'true';
-
-  const mapping = FEATURE_MAP[key];
-  if (mapping) {
-    return {
-      label: mapping.label,
-      icon: mapping.icon,
-      active: value !== 'false'
-    };
-  }
-
-  // Fallback para llaves desconocidas: Capitalize First
-  const fallbackLabel = key.charAt(0).toUpperCase() + key.slice(1);
-  return {
-    label: fallbackLabel,
-    icon: null,
-    active: value !== 'false'
-  };
-};
-
-
-
-
-
-// Taxonomy options with official Velvet Sync icons
 const TAXONOMY_OPTIONS = {
   usage: [
     { value: '', label: 'Todos', icon: 'icon_explore' },
@@ -121,153 +44,131 @@ const TAXONOMY_OPTIONS = {
   ]
 };
 
-/**
- * Velvet Sync Device Catalog
- * Dark Neon Noir aesthetic - Engineering focused, privacy-first
- * With AI Impulse Verified compatibility
- */
 function DeviceCatalog() {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedDevice, setSelectedDevice] = useState(null);
 
-  // Search and filter states
   const [searchTerm, setSearchTerm] = useState('');
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const debouncedSearchTerm = useDebounce(searchTerm, 100);
   const [selectedFeatures, setSelectedFeatures] = useState([]);
   const [showAIFilter, setShowAIFilter] = useState(false);
 
-  // Taxonomy filter states
-  const [selectedUsageType, setSelectedUsageType] = useState(''); // Masculino, Femenino, Universal
-  const [selectedAnatomy, setSelectedAnatomy] = useState(''); // Próstata, Clítoris, Vaginal, Anal
-  const [selectedStimulation, setSelectedStimulation] = useState(''); // Vibración, Succión, Empuje, etc.
+  const [selectedUsageType, setSelectedUsageType] = useState('');
+  const [selectedAnatomy, setSelectedAnatomy] = useState('');
+  const [selectedStimulation, setSelectedStimulation] = useState('');
 
-  // AI Demo Modal states
   const [showAIDemo, setShowAIDemo] = useState(false);
-  const [aiDemoState, setAiDemoState] = useState('idle');
-  const [aiMessage, setAiMessage] = useState('');
-  const [testProgress, setTestProgress] = useState(0);
-  const [testLog, setTestLog] = useState([]);
-  const testTimerRef = useRef(null);
 
-  // PDF Viewer Modal state
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [pdfUrl, setPdfUrl] = useState('');
   const [pdfTitle, setPdfTitle] = useState('');
-  const [pdfType, setPdfType] = useState('pdf'); // 'pdf' or 'image'
+  const [pdfType, setPdfType] = useState('pdf');
 
-  // Mobile app detection state
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   useEffect(() => {
-    // Detect if running on mobile
     setIsMobileDevice(isMobile());
   }, []);
 
-  // Pagination states - Reduced for better INP
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation]);
 
-  // AI-Ready devices (rMesh 11-byte protocol)
   const AI_READY_DEVICES = useMemo(() => new Set([
-    8154,  // Caballero No. 3
-    7043,  // Modelo compatible
-    8131,  // YCGS001
-    8815,  // AATD593 - Dual Channel con precisión 0-255
-    8215,  // Prueba Cuadrícula 20
-    8001,  // SJH-011
+    8154, 7043, 8131, 8815, 8215, 8001,
   ]), []);
 
-  // Check if device supports AI Impulse
-  const isAIReady = (deviceId) => AI_READY_DEVICES.has(deviceId);
+  const isAIReady = useCallback((deviceId) => AI_READY_DEVICES.has(deviceId), [AI_READY_DEVICES]);
 
-  // Get original Chinese name for translated titles
-  const getOriginalName = (title) => {
-    const originalNames = {
-      'Rosa S5': 'S5 玫瑰花',
-      'Qian Du TD001': '谦度 TD001',
-      'YueLei CD20-APP': '悦蕾 CD20-APP',
-      'Cici Magnético Vestible': '茜茜磁吸穿戴',
-      'Anillo Retenedor Conejito APP': '兔子锁精环 APP 版',
-      'Prueba Zola 8+8+8': '左拉测试 8+8+8',
-      'Petty JX035': '佩蒂 JX035',
-      'Bei Ting Gen 3': '贝挺 3 代',
-      'Xiao Lang Vestible': '小浪扣动穿戴',
-      'Lao Sun Pendiente': '老孙待定',
-      'Anal Retráctil Negro': '中德黑色伸缩肛塞',
-      'Código Prueba Doble Motor Estándar': '标准双马达打样测试码',
-      'Unica-APP': '优利卡 -APP',
-      'Huevo Saltarín Cabeza Gato': '猫头跳蛋',
-      'Rey del Ano': '后庭王者',
-      'Lamedor QZ-001': '舌舔 QZ-001',
-      'Xi Bao': '喜宝',
-      'Fei Tian Run': '飞天润',
-      'AiYu CL1910': '艾余 CL1910',
-      'Generación 2': '若拉 2 代',
-      'Osito': '小熊',
-      'Caballero No. 3': '骑士 3 号',
-      'Pequeño Cohete': '小火箭',
-      'Prueba Cuadrícula 20': '20 宫格测试',
-      'Mariposa Soñada': '梦蝶',
-      'Huevo Saltarín Ballenita': '小鲸鱼跳蛋',
-      'Prueba 18 Cuadrícula - Vestible': '18 宫格测试公版 - 穿戴',
-      'Alegría del Agua': '水之欢',
-      'Por Definir': '待定',
-      'Xie Yong Pendiente': '谢勇待定',
-      'Bola Eléctrica': '电击球',
-      'Tren de Potencia': '动力火车',
-      'Bola Mágica': '魔法球',
-      '8+8+8 Calefacción': '8+8+8 加热',
-      'Doble Bola': '双球',
-      'Pequeño Delfín': '小海豚',
-    };
-    return originalNames[title] || null;
+  const normalizeField = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) {
+          return parsed.map(item => String(item).toLowerCase().trim());
+        }
+        return [String(parsed).toLowerCase().trim()];
+      } catch {
+        return value.split(',').map(item => item.toLowerCase().trim());
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.map(item => String(item).toLowerCase().trim());
+    }
+    if (typeof value === 'object') {
+      return Object.entries(value)
+        .filter(([, v]) => v)
+        .map(([k]) => k.toLowerCase().trim());
+    }
+    return [String(value).toLowerCase().trim()];
   };
 
-  // Helper to map data from Supabase to components expected format
-  const mapDeviceFromSupabase = (device) => {
-    // Parse supported_funcs (exhaustively split by commas, pipes, or semicolons)
-    const motors = device.supported_funcs 
-      ? device.supported_funcs.split(/[|,;]/).map(f => f.trim()).filter(Boolean) 
-      : [];
-    
-    // Parse motor_logic to funcObj
+  const mapDeviceFromSupabase = useCallback((device) => {
+    let motors = [];
+    if (device.supported_funcs) {
+      if (typeof device.supported_funcs === 'string') {
+        try {
+          const parsed = JSON.parse(device.supported_funcs);
+          if (typeof parsed === 'object' && parsed !== null) {
+            motors = Object.entries(parsed).filter(([, v]) => v).map(([k]) => k);
+          } else {
+            motors = device.supported_funcs.split(/[|,;]/).map(f => f.trim()).filter(Boolean);
+          }
+        } catch {
+          motors = device.supported_funcs.split(/[|,;]/).map(f => f.trim()).filter(Boolean);
+        }
+      }
+    }
+
     const funcObj = {
       CH1: device.motor_logic === 'single' || device.motor_logic === 'dual',
       CH2: device.motor_logic === 'dual'
     };
 
+    const usageArr = normalizeField(device.usage_type);
+    const anatomyArr = normalizeField(device.target_anatomy);
+    const stimArr = normalizeField(device.stimulation_type) || [];
+
+    const stimFromFuncs = motors
+      .filter(k => STIM_ALIASES[k.toLowerCase()])
+      .map(k => STIM_ALIASES[k.toLowerCase()]);
+
+    const mergedStim = [...new Set([...stimArr, ...stimFromFuncs])];
+
+    const title = device.model_name || `Dispositivo ${device.id}`;
+    const barcode = device.barcode || device.id.toString();
+
     return {
       ...device,
-      title: device.model_name || `Dispositivo ${device.id}`, // Aliasing for compatibility
+      title,
       pics: device.image_url || getDeviceImage(device.id),
       qrcode: device.qr_code_url || getDeviceQR(device.id),
-      motors: motors,
-      funcObj: funcObj,
+      motors,
+      funcObj,
       isPrecise: device.is_precise_new ? 1 : 0,
-      barcode: device.barcode || device.id.toString(),
+      barcode,
+      _searchKey: `${title.toLowerCase()} ${barcode.toLowerCase()} ${device.id}`,
       manualUrl: device.ficha_tecnica_url || getDevicePDF(device.id),
       techSheetUrl: device.ficha_tecnica_url || getDevicePDF(device.id),
-      // Flatten category for simpler access in filters
-      usage_type: device.usage_type || 'universal',
-      target_anatomy: device.target_anatomy || 'universal',
-      stimulation_type: device.stimulation_type || 'vibration'
+      usage_type: usageArr?.[0] || 'universal',
+      target_anatomy: anatomyArr || ['universal'],
+      stimulation_type: mergedStim.length > 0 ? mergedStim : ['vibration']
     };
-  };
+  }, []);
 
   useEffect(() => {
     const fetchDevices = async () => {
       try {
         const { data, error } = await supabase
           .from('device_catalog')
-          .select('*')
+          .select('id, model_name, image_url, qr_code_url, ficha_tecnica_url, motor_logic, is_precise_new, supported_funcs, usage_type, target_anatomy, stimulation_type')
           .order('id', { ascending: true });
-        
+
         if (error) throw error;
         if (data) {
           const mappedData = data.map(mapDeviceFromSupabase);
@@ -280,36 +181,28 @@ function DeviceCatalog() {
       }
     };
     fetchDevices();
-  }, []);
+  }, [mapDeviceFromSupabase]);
 
-  // Get all unique features from all devices and clean them up
   const allFeatures = useMemo(() => {
     const featuresSet = new Set();
-    
+
     devices.forEach(device => {
       if (!device.motors) return;
 
-      // Intentar procesar como array o string
       const rawMotors = Array.isArray(device.motors) ? device.motors : [device.motors];
 
       rawMotors.forEach(rawItem => {
         if (!rawItem) return;
 
-        // Convertir a string si es objeto
         let str = typeof rawItem === 'string' ? rawItem : JSON.stringify(rawItem);
-        
-        // 1. Limpiar caracteres JSON y pipes
-        // Esto manejará {"classic": true}, "classic: true", classic|music, etc.
+
         let cleaned = str.replace(/{|}|"|\[|\]/g, '');
-        
-        // Split por pipe y por coma (por si viene JSON list)
+
         const parts = cleaned.split(/[|,]/);
-        
+
         parts.forEach(part => {
-          // Tomar solo la llave si es key:value
           let key = part.split(':')[0].trim();
-          
-          // Filtrar basura y valores booleanos crudos
+
           if (key && !['true', 'false', 'null', 'undefined'].includes(key.toLowerCase())) {
             featuresSet.add(key);
           }
@@ -324,213 +217,129 @@ function DeviceCatalog() {
     });
   }, [devices]);
 
-
-
-  // Filter devices - optimized with debounced search
   const filteredDevices = useMemo(() => {
-    let result = [...devices];
+    const hasSearch = debouncedSearchTerm.trim();
+    const searchTermLower = hasSearch ? debouncedSearchTerm.toLowerCase().trim() : '';
+    const hasFeatures = selectedFeatures.length > 0;
 
-    // AI & Precisión filter
-    if (showAIFilter) {
-      result = result.filter(device => isAIReady(device.id));
+    const result = [];
+
+    for (let i = 0; i < devices.length; i++) {
+      const device = devices[i];
+
+      if (showAIFilter && !isAIReady(device.id)) continue;
+      if (selectedUsageType && device.usage_type !== selectedUsageType) continue;
+      if (selectedAnatomy && !device.target_anatomy?.includes(selectedAnatomy)) continue;
+
+      if (selectedStimulation) {
+        const stimArr = device.stimulation_type;
+        if (!stimArr) continue;
+        let found = false;
+        for (let s = 0; s < stimArr.length; s++) {
+          if (stimArr[s] === selectedStimulation || stimArr[s].includes(selectedStimulation)) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) continue;
+      }
+
+      if (hasSearch) {
+        if (!device._searchKey.includes(searchTermLower)) continue;
+      }
+
+      if (hasFeatures) {
+        const motors = device.motors;
+        if (!motors) continue;
+        let found = false;
+        for (let m = 0; m < motors.length; m++) {
+          if (selectedFeatures.includes(motors[m])) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) continue;
+      }
+
+      result.push(device);
     }
 
-    // Taxonomy filters
-    if (selectedUsageType) {
-      result = result.filter(device => device.usage_type === selectedUsageType);
-    }
-
-    if (selectedAnatomy) {
-      result = result.filter(device => device.target_anatomy === selectedAnatomy);
-    }
-
-    if (selectedStimulation) {
-      result = result.filter(device => device.stimulation_type === selectedStimulation);
-    }
-
-    // Filter by debounced search term
-    if (debouncedSearchTerm.trim()) {
-      const term = debouncedSearchTerm.toLowerCase().trim();
-      result = result.filter(device =>
-        device.title.toLowerCase().includes(term) ||
-        device.barcode.toLowerCase().includes(term) ||
-        device.id.toString().includes(term)
-      );
-    }
-
-    // Filter by selected features
-    if (selectedFeatures.length > 0) {
-      result = result.filter(device =>
-        device.motors && device.motors.some(feature => selectedFeatures.includes(feature))
-      );
-    }
-
-    // Sort by ID
     result.sort((a, b) => a.id - b.id);
-
     return result;
-  }, [devices, debouncedSearchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation]);
+  }, [devices, debouncedSearchTerm, selectedFeatures, showAIFilter, selectedUsageType, selectedAnatomy, selectedStimulation, isAIReady]);
 
-  // Pagination calculation
+  const deferredFilteredDevices = useDeferredValue(filteredDevices);
+
   const totalPages = Math.ceil(filteredDevices.length / itemsPerPage);
-  const currentPageDevices = filteredDevices.slice(
+  const currentPageDevices = deferredFilteredDevices.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
 
-  // Page handlers
-  const goToPage = (page) => {
+  const goToPage = useCallback((page) => {
     if (page < 1 || page > totalPages) return;
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, [totalPages]);
 
-  // Toggle feature filter
-  const toggleFeature = (feature) => {
+  const toggleFeature = useCallback((feature) => {
     setSelectedFeatures(prev =>
       prev.includes(feature)
         ? prev.filter(f => f !== feature)
         : [...prev, feature]
     );
-  };
+  }, []);
 
-  // Clear all filters
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearchTerm('');
     setSelectedFeatures([]);
     setShowAIFilter(false);
     setSelectedUsageType('');
     setSelectedAnatomy('');
     setSelectedStimulation('');
-  };
+  }, []);
 
-  // Start AI Demo
-  const startAIDemo = (device) => {
+  const startAIDemo = useCallback((device) => {
     setSelectedDevice(device);
     setShowAIDemo(true);
-    setAiDemoState('idle');
-    setAiMessage('');
-    setTestProgress(0);
-    setTestLog([]);
-  };
+  }, []);
 
-  // Run AI Test (3-5 seconds)
-  const runAITest = () => {
-    setAiDemoState('speaking');
-    setAiMessage(`Iniciando Laboratorio de Optimización para ${selectedDevice.title}...`);
-
-    // AI Avatar speaks - More professional / engineering tone
-    setTimeout(() => {
-      setAiDemoState('testing');
-      setTestProgress(0);
-      setTestLog([
-        '🔒 Estableciendo túnel P2P cifrado...',
-        `📡 Detectado: ${selectedDevice.title} (ID: ${selectedDevice.id})`,
-        `⚙️ Arquitectura: ${selectedDevice.motor_logic === 'dual' ? 'Dual Channel rMesh' : 'Single Channel Standard'}`
-      ]);
-
-      const testDuration = 6000; // 6s duration for more presence
-      const startTime = Date.now();
-
-      testTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        const progress = Math.min((elapsed / testDuration) * 100, 100);
-        setTestProgress(progress);
-
-        // Dynamic log messages based on device capabilities
-        if (elapsed > 1000 && elapsed < 1100) {
-          setTestLog(prev => [...prev, '⚡ Calibrando latencia de respuesta...']);
-        }
-        if (elapsed > 2000 && elapsed < 2100) {
-          const mainCap = selectedDevice.stimulation_type || 'Vibración';
-          setTestLog(prev => [...prev, `🌀 Sincronizando impulsos de ${mainCap}...`]);
-        }
-        if (elapsed > 3500 && elapsed < 3600) {
-          if (selectedDevice.is_precise_new) {
-            setTestLog(prev => [...prev, '🎯 Verificando precisión 0-255 (Impulse Verified)']);
-          } else {
-            setTestLog(prev => [...prev, '📈 Validando curvas de intensidad estándar...']);
-          }
-        }
-        if (elapsed > 4500 && elapsed < 4600) {
-          setTestLog(prev => [...prev, '🛡️ Capa de privacidad Velvet Sync: Activa']);
-        }
-
-        if (progress >= 100) {
-          clearInterval(testTimerRef.current);
-          completeAITest();
-        }
-      }, 50);
-    }, 1500);
-  };
-
-  // Complete AI Test and send stop commands
-  const completeAITest = () => {
-    setAiDemoState('complete');
-    setTestProgress(100);
-
-    // Send specific stop commands
-    const stopCommands = [];
-    if (selectedDevice?.funcObj?.CH1) {
-      stopCommands.push('🛑 CH1: 0xD5964C (STOP)');
-    }
-    if (selectedDevice?.funcObj?.CH2) {
-      stopCommands.push('🛑 CH2: 0xA5113F (STOP)');
-    }
-    if (stopCommands.length === 0) {
-      stopCommands.push('🛑 Comando STOP genérico enviado');
-    }
-
-    setTestLog(prev => [...prev, ...stopCommands, '✅ Sesión finalizada correctamente']);
-  };
-
-  // Close AI Demo
-  const closeAIDemo = () => {
-    if (testTimerRef.current) {
-      clearInterval(testTimerRef.current);
-    }
+  const closeAIDemo = useCallback(() => {
     setShowAIDemo(false);
-    setAiDemoState('idle');
-    setSelectedDevice(null);
-  };
+  }, []);
 
-  // Open native app or sync with Supabase
-  const handleOpenNativeApp = async (action = 'connect') => {
+  const handleOpenNativeApp = useCallback(async (action = 'connect') => {
     if (!selectedDevice) return;
 
-    // 1. Intentar abrir la app vía Deep Link (velvetsync://)
     const deepLink = `velvetsync://device/${selectedDevice.id}?action=${action}`;
-    
-    // 2. Registrar la intención en Supabase para sincronización Realtime (Web -> App bridge)
+
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('device_sync')
         .insert([
-          { 
-            device_id: selectedDevice.id, 
+          {
+            device_id: selectedDevice.id,
             command: action === 'sync_profile' ? 'APPLY_AI_PROFILE' : 'INIT_CONNECTION',
             payload: {
               timestamp: new Date().toISOString(),
               toy_id: selectedDevice.id,
               ai_optimized: true,
               motor_logic: selectedDevice.motor_logic,
-              intensity_map: [255, 128, 64] // Simulado: perfil de intensidad optimizado
+              intensity_map: [255, 128, 64]
             },
             status: 'pending'
           }
         ]);
 
       if (error) throw error;
-      console.log('📡 Sincronización enviada a Supabase:', data);
+      console.log('📡 Sincronización enviada a Supabase:');
     } catch (err) {
       console.error('❌ Error de sincronización:', err);
     }
 
-    // 3. Si es móvil, intentar el disparo del Deep Link
     if (isMobileDevice) {
       window.location.href = deepLink;
-      
-      // Fallback si no abre en 2 segundos
+
       setTimeout(() => {
         alert(
           `📡 Perfil optimizado enviado al puente Velvet Sync.\n\n` +
@@ -540,14 +349,12 @@ function DeviceCatalog() {
       return;
     }
 
-    // Si es Desktop, informar que se envió el perfil a la nube
     alert(
       `🧪 Perfil "Sináptico" enviado con éxito.\n\n` +
       `Tu ${selectedDevice.title} (SN: ${selectedDevice.id}) recibirá la configuración en cuanto abras la app móvil.`
     );
-  };
+  }, [selectedDevice, isMobileDevice]);
 
-  // Open PDF/Image in modal viewer
   const openPdfViewer = useCallback((url, title, type = 'pdf') => {
     setPdfUrl(url);
     setPdfTitle(title);
@@ -583,8 +390,7 @@ function DeviceCatalog() {
   }
 
   return (
-    <div className="velvet-catalog" style={{ width: '100%', minWidth: '100vw' }}>
-      {/* Hero Section */}
+    <div className="velvet-catalog">
       <header className="velvet-hero">
         <div className="hero-glow"></div>
         <div className="hero-content">
@@ -612,9 +418,7 @@ function DeviceCatalog() {
         </div>
       </header>
 
-      {/* Search and Filters */}
       <div className="filters-section">
-        {/* Pagination Per Page Selector */}
         <div className="pagination-per-page">
           <label>📄 Mostrar:</label>
           <select
@@ -631,92 +435,43 @@ function DeviceCatalog() {
           <span className="items-label">por página</span>
         </div>
 
-        {/* Taxonomy Filters */}
         <div className="taxonomy-filters">
           <h3 className="taxonomy-title">🔬 Taxonomía de Filtros Visuales</h3>
 
           <div className="taxonomy-visual-grid">
-            {/* Tipo de Uso */}
-            <div className="taxonomy-visual-group">
-              <label className="taxonomy-label">Tipo de Uso:</label>
-              <div className="taxonomy-chips">
-                {TAXONOMY_OPTIONS.usage.map(opt => (
-                  <button 
-                    key={opt.value}
-                    className={`taxonomy-chip ${selectedUsageType === opt.value ? 'active' : ''}`}
-                    onClick={() => setSelectedUsageType(opt.value)}
-                  >
-                    <span className="chip-icon">
-                      <img 
-                        src={getIconUrl(opt.icon)} 
-                        alt="" 
-                        className="taxonomy-icon-img" 
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    </span>
-                    <span className="chip-label">{opt.label}</span>
-                  </button>
-                ))}
+            {Object.entries(TAXONOMY_OPTIONS).map(([key, options]) => (
+              <div key={key} className="taxonomy-visual-group">
+                <label className="taxonomy-label">
+                  {key === 'usage' ? 'Tipo de Uso:' : key === 'anatomy' ? 'Anatomía Objetivo:' : 'Tipo de Estimulación:'}
+                </label>
+                <div className="taxonomy-chips">
+                  {options.map(opt => {
+                    const selectedValue = key === 'usage' ? selectedUsageType : key === 'anatomy' ? selectedAnatomy : selectedStimulation;
+                    const setter = key === 'usage' ? setSelectedUsageType : key === 'anatomy' ? setSelectedAnatomy : setSelectedStimulation;
+                    return (
+                      <button
+                        key={opt.value}
+                        className={`taxonomy-chip ${selectedValue === opt.value ? 'active' : ''}`}
+                        onClick={() => setter(opt.value)}
+                      >
+                        <span className="chip-icon">
+                          <img
+                            src={getIconUrl(opt.icon)}
+                            alt=""
+                            className="taxonomy-icon-img"
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                        </span>
+                        <span className="chip-label">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-
-            {/* Anatomía Objetivo */}
-            <div className="taxonomy-visual-group">
-              <label className="taxonomy-label">Anatomía Objetivo:</label>
-              <div className="taxonomy-chips">
-                {TAXONOMY_OPTIONS.anatomy.map(opt => (
-                  <button 
-                    key={opt.value}
-                    className={`taxonomy-chip ${selectedAnatomy === opt.value ? 'active' : ''}`}
-                    onClick={() => setSelectedAnatomy(opt.value)}
-                  >
-                    <span className="chip-icon">
-                      <img 
-                        src={getIconUrl(opt.icon)} 
-                        alt="" 
-                        className="taxonomy-icon-img" 
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    </span>
-                    <span className="chip-label">{opt.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Tipo de Estimulación */}
-            <div className="taxonomy-visual-group">
-              <label className="taxonomy-label">Tipo de Estimulación:</label>
-              <div className="taxonomy-chips">
-                {TAXONOMY_OPTIONS.stimulation.map(opt => (
-                  <button 
-                    key={opt.value}
-                    className={`taxonomy-chip ${selectedStimulation === opt.value ? 'active' : ''}`}
-                    onClick={() => setSelectedStimulation(opt.value)}
-                  >
-                    <span className="chip-icon">
-                      <img 
-                        src={getIconUrl(opt.icon)} 
-                        alt="" 
-                        className="taxonomy-icon-img" 
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                        }}
-                      />
-                    </span>
-                    <span className="chip-label">{opt.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            ))}
           </div>
         </div>
 
-        {/* AI & Precisión Filter Toggle */}
         <div className="ai-filter-toggle">
           <button
             className={`ai-filter-btn ${showAIFilter ? 'active' : ''}`}
@@ -733,7 +488,6 @@ function DeviceCatalog() {
           )}
         </div>
 
-        {/* Search Bar */}
         <div className="search-container">
           <input
             type="text"
@@ -747,41 +501,40 @@ function DeviceCatalog() {
           )}
         </div>
 
-        {/* Active Filters */}
         {(searchTerm || selectedFeatures.length > 0 || showAIFilter || selectedUsageType || selectedAnatomy || selectedStimulation) && (
           <div className="active-filters">
             <span className="active-filters-label">Filtros activos:</span>
             {selectedUsageType && (
               <span className="active-filter-tag taxonomy-tag">
-                📊 Uso: {
-                  selectedUsageType === 'external' ? 'Externo' : 
-                  selectedUsageType === 'internal' ? 'Interno' : 
-                  selectedUsageType === 'universal' ? 'Universal' : selectedUsageType
-                }
+                📊 Uso: {{
+                  external: 'Externo',
+                  internal: 'Interno',
+                  universal: 'Universal'
+                }[selectedUsageType] || selectedUsageType}
                 <button onClick={() => setSelectedUsageType('')}>✕</button>
               </span>
             )}
             {selectedAnatomy && (
               <span className="active-filter-tag taxonomy-tag">
-                🎯 Anatomía: {
-                  selectedAnatomy === 'clitoral' ? 'Clítoris' :
-                  selectedAnatomy === 'vaginal' ? 'Vaginal' :
-                  selectedAnatomy === 'anal' ? 'Anal' :
-                  selectedAnatomy === 'prostate' ? 'Próstata' :
-                  selectedAnatomy === 'universal' ? 'Universal' : selectedAnatomy
-                }
+                🎯 Anatomía: {{
+                  clitoral: 'Clítoris',
+                  vaginal: 'Vaginal',
+                  anal: 'Anal',
+                  prostate: 'Próstata',
+                  universal: 'Universal'
+                }[selectedAnatomy] || selectedAnatomy}
                 <button onClick={() => setSelectedAnatomy('')}>✕</button>
               </span>
             )}
             {selectedStimulation && (
               <span className="active-filter-tag taxonomy-tag">
-                ⚡ Estimulación: {
-                  selectedStimulation === 'vibration' ? 'Vibración' :
-                  selectedStimulation === 'suction' ? 'Succión' :
-                  selectedStimulation === 'thrust' ? 'Empuje' :
-                  selectedStimulation === 'heating' ? 'Calentamiento' :
-                  selectedStimulation === 'interactive' ? 'Interactivo' : selectedStimulation
-                }
+                ⚡ Estimulación: {{
+                  vibration: 'Vibración',
+                  suction: 'Succión',
+                  thrust: 'Empuje',
+                  heating: 'Calentamiento',
+                  interactive: 'Interactivo'
+                }[selectedStimulation] || selectedStimulation}
                 <button onClick={() => setSelectedStimulation('')}>✕</button>
               </span>
             )}
@@ -809,7 +562,6 @@ function DeviceCatalog() {
           </div>
         )}
 
-        {/* Feature Filters */}
         <div className="features-filter">
           <h3 className="features-filter-title">Filtrar por característica:</h3>
           <div className="features-list">
@@ -825,10 +577,10 @@ function DeviceCatalog() {
                   onClick={() => toggleFeature(feature)}
                 >
                   {iconName && (
-                    <img 
-                      src={getIconUrl(iconName)} 
-                      className="feature-icon-mini" 
-                      alt="" 
+                    <img
+                      src={getIconUrl(iconName)}
+                      className="feature-icon-mini"
+                      alt=""
                       onError={(e) => e.target.style.display = 'none'}
                     />
                   )}
@@ -838,12 +590,10 @@ function DeviceCatalog() {
             })}
           </div>
         </div>
-
       </div>
 
-      {/* Device Grid with Virtuoso Virtualization */}
       <div className="device-gallery">
-        {filteredDevices.length === 0 ? (
+        {deferredFilteredDevices.length === 0 ? (
           <div className="no-results">
             <h3>⚠ Sin Resultados</h3>
             <p>No hay dispositivos que coincidan con los filtros seleccionados.</p>
@@ -854,28 +604,21 @@ function DeviceCatalog() {
         ) : (
           <>
             <div className="pagination-info">
-              Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredDevices.length)} de {filteredDevices.length} dispositivos
+              Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, deferredFilteredDevices.length)} de {deferredFilteredDevices.length} dispositivos
             </div>
-            <Virtuoso
-              style={{ height: 'calc(100vh - 500px)', minHeight: '400px' }}
-              data={currentPageDevices}
-              itemContent={(index, device) => (
-                <DeviceCard
-                  key={device.id}
-                  device={device}
-                  isAIReady={isAIReady}
-                  onStartAIDemo={startAIDemo}
-                  onSelectDevice={setSelectedDevice}
-                />
-              )}
-              overscan={200}
-              increaseViewportBy={500}
-            />
+            {currentPageDevices.map(device => (
+              <DeviceCard
+                key={device.id}
+                device={device}
+                isAIReady={isAIReady}
+                onStartAIDemo={startAIDemo}
+                onSelectDevice={setSelectedDevice}
+              />
+            ))}
           </>
         )}
       </div>
 
-      {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="pagination-controls">
           <button className="pagination-btn" onClick={() => goToPage(1)} disabled={currentPage === 1}>⏮</button>
@@ -903,376 +646,32 @@ function DeviceCatalog() {
         </div>
       )}
 
-      {/* AI Demo Modal - VELVET LAB MODE */}
       {showAIDemo && selectedDevice && (
-        <div className="ai-demo-overlay" onClick={closeAIDemo}>
-          <div className="ai-demo-modal velvet-lab-mode" onClick={(e) => e.stopPropagation()}>
-            <button className="ai-demo-close" onClick={closeAIDemo}>
-              &times;
-            </button>
-
-            <div className="ai-demo-content">
-              {/* Header with Velvet Logo */}
-              <div className="ai-lab-header">
-                <img src={velvetLogo} alt="Velvet Sync" className="ai-lab-logo" />
-                <div className="ai-lab-tag">LABORATORIO DE IA</div>
-              </div>
-
-              {/* Haptic Visualizer / Avatar */}
-              <div className={`ai-avatar-section ${aiDemoState}`}>
-                <div className={`ai-avatar ${aiDemoState}`}>
-                  <div className="avatar-ring"></div>
-                  <div className="avatar-core"></div>
-                  <div className="avatar-haptic-pulse"></div>
-                </div>
-                <div className="ai-status">
-                  {aiDemoState === 'idle' && 'VELVET AI: LISTO'}
-                  {aiDemoState === 'speaking' && 'ANALIZANDO HARDWARE...'}
-                  {aiDemoState === 'testing' && 'SINCRONIZACIÓN SINÁPTICA'}
-                  {aiDemoState === 'complete' && 'OPTIMIZACIÓN FINALIZADA'}
-                </div>
-              </div>
-
-              {/* Status Message */}
-              {aiMessage && (
-                <div className="ai-message-bubble lab-style">
-                  <p>{aiMessage}</p>
-                </div>
-              )}
-
-              {/* Device Tech Context */}
-              <div className="ai-device-info lab-context">
-                <h3>{selectedDevice.title}</h3>
-                <p className="device-id">SN: {selectedDevice.id}</p>
-                <div className="ai-specs">
-                  <span className="spec-badge">
-                    {selectedDevice.motor_logic === 'dual' ? 'DUAL MOTOR' : 'SINGLE MOTOR'}
-                  </span>
-                  {selectedDevice.is_precise_new && (
-                    <span className="spec-badge precision">IMPULSE VERIFIED</span>
-                  )}
-                  <span className="spec-badge">
-                    {selectedDevice.usage_type.toUpperCase()}
-                  </span>
-                </div>
-              </div>
-
-              {/* Pulse Visualizer (Active during test) */}
-              {aiDemoState === 'testing' && (
-                <div className="haptic-visualizer-bars">
-                  {[...Array(8)].map((_, i) => (
-                    <div 
-                      key={i} 
-                      className="haptic-bar" 
-                      style={{ 
-                        animationDelay: `${i * 0.1}s`,
-                        height: `${30 + Math.random() * 70}%`
-                      }}
-                    ></div>
-                  ))}
-                </div>
-              )}
-
-              {/* Initial Action */}
-              {aiDemoState === 'idle' && (
-                <button className="ai-test-btn lab-btn" onClick={runAITest}>
-                  <span className="btn-icon">🧠</span>
-                  Iniciar Sincronización IA
-                </button>
-              )}
-
-              {/* Progress Bar */}
-              {aiDemoState === 'testing' && (
-                <div className="test-progress-section lab-progress">
-                  <div className="progress-bar">
-                    <div
-                      className="progress-fill"
-                      style={{ width: `${testProgress}%` }}
-                    ></div>
-                  </div>
-                  <div className="progress-footer">
-                    <span className="progress-pct">{Math.round(testProgress)}%</span>
-                    <span className="progress-detail">CALIBRANDO SENSORES</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Test Log */}
-              {(testLog.length > 0) && (
-                <div className="test-log lab-log">
-                  <div className="log-entries">
-                    {testLog.map((entry, idx) => (
-                      <div key={idx} className={`log-entry ${entry.includes('🛑') ? 'stop-command' : ''}`}>
-                        <span className="log-timestamp">[{new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' })}]</span> {entry}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Final Actions */}
-              {aiDemoState === 'complete' && (
-                <div className="ai-demo-actions lab-actions">
-                  <div className="complete-summary">
-                    <p>Perfil de placer generado y cifrado localmente para este hardware.</p>
-                  </div>
-                  
-                  <button 
-                    className="ai-open-app-btn pulse-glow" 
-                    onClick={() => handleOpenNativeApp('sync_profile')}
-                  >
-                    <span className="btn-icon">⚡</span>
-                    Subir Perfil a Velvet App
-                  </button>
-                  
-                  <button className="ai-close-btn lab-secondary" onClick={closeAIDemo}>
-                    Finalizar Sesión
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <AIDemoModal
+          selectedDevice={selectedDevice}
+          onClose={closeAIDemo}
+        />
       )}
 
-      {/* Device Detail Modal (non-AI) */}
       {!showAIDemo && selectedDevice && (
-        <div className="device-modal-overlay" onClick={() => startTransition(() => setSelectedDevice(null))}>
-          <div className="device-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="device-modal-close" onClick={() => startTransition(() => setSelectedDevice(null))}>
-              &times;
-            </button>
-
-            <div className="device-modal-content">
-              <div className="device-modal-left">
-                <div className="device-modal-image">
-                  {selectedDevice.pics ? (
-                    <img
-                      src={selectedDevice.pics}
-                      alt={selectedDevice.title}
-                      onError={(e) => {
-                        e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect fill="%231a1a1a" width="400" height="300"/><text fill="%23333" x="50%" y="50%" text-anchor="middle" dy=".3em">Sin Imagen</text></svg>';
-                      }}
-                    />
-                  ) : (
-                    <div className="device-image-placeholder-large">
-                      <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-                        <rect fill="#1a1a1a" width="400" height="300" />
-                        <text fill="#333" x="50%" y="50%" textAnchor="middle" dy=".3em">Sin Imagen</text>
-                      </svg>
-                    </div>
-                  )}
-                </div>
-
-                {selectedDevice.qrcode && (
-                  <div className="device-qrcode">
-                    <h4>Código QR</h4>
-                    <img src={selectedDevice.qrcode} alt="QR Code" />
-                  </div>
-                )}
-
-                {/* Connect Button Large - Tries to open native app */}
-                <button
-                  className="connect-btn-large"
-                  onClick={handleOpenNativeApp}
-                >
-                  <span className="btn-icon">📡</span>
-                  {isMobileDevice ? 'Vincular en App' : 'Vincular en Velvet Sync'}
-                </button>
-
-                {/* Open in App Button - Only show on mobile as alternative */}
-                {isMobileDevice && (
-                  <button
-                    className="open-app-btn-large"
-                    onClick={handleOpenNativeApp}
-                  >
-                    <span className="btn-icon">📱</span>
-                    Abrir en la App
-                  </button>
-                )}
-              </div>
-
-              <div className="device-modal-info">
-                <h2>{selectedDevice.title}</h2>
-                <p className="device-modal-id">ID del Dispositivo: {selectedDevice.id}</p>
-
-                {/* Technical Grid */}
-                <div className="device-tech-grid">
-                  <div className="tech-item">
-                    <span className="tech-label">Barcode</span>
-                    <span className="tech-value">{selectedDevice.barcode}</span>
-                  </div>
-                  <div className="tech-item">
-                    <span className="tech-label">Conexión</span>
-                    <span className="tech-value wireless">{selectedDevice.wireless?.toUpperCase() || 'N/A'}</span>
-                  </div>
-                  <div className="tech-item">
-                    <span className="tech-label">Channel Logic</span>
-                    <span className={`tech-value ${selectedDevice.funcObj?.CH1 && selectedDevice.funcObj?.CH2 ? 'dual' : 'single'}`}>
-                      {selectedDevice.funcObj?.CH1 && selectedDevice.funcObj?.CH2 ? 'Dual Channel' : 'Single Channel'}
-                    </span>
-                  </div>
-                  <div className="tech-item">
-                    <span className="tech-label">Precisión</span>
-                    <span className="tech-value">{selectedDevice.isPrecise === 1 ? '0-255' : '0-100'}</span>
-                  </div>
-                  <div className="tech-item">
-                    <span className="tech-label">Factory ID</span>
-                    <span className="tech-value">{selectedDevice.factoryId || 'N/A'}</span>
-                  </div>
-                  <div className="tech-item">
-                    <span className="tech-label">Cifrado</span>
-                    <span className={`tech-value ${selectedDevice.isEncrypt === 0 ? 'secure' : 'warning'}`}>
-                      {selectedDevice.isEncrypt === 0 ? '✓ Seguro' : '⚠ Activo'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Capabilities */}
-                <div className="device-modal-capabilities">
-                  <h3>Características / Capacidades</h3>
-                  {selectedDevice.motors && selectedDevice.motors.length > 0 ? (
-                    <div className="capability-tags">
-                      {selectedDevice.motors
-                        .flatMap(m => typeof m === 'string' ? m.split(/[|,;]/) : m)
-                        .map(f => f.trim())
-                        .filter(Boolean)
-                        .map((cap, idx) => {
-                          const formatted = formatCapability(cap);
-                        if (!formatted) return null;
-                        
-                        return (
-                          <span 
-                            key={idx} 
-                            className={`capability-tag ${!formatted.active ? 'inactive' : ''}`}
-                          >
-                            {formatted.icon && (
-                              <img 
-                                src={getIconUrl(formatted.icon)} 
-                                className="cap-icon-mini" 
-                                alt="" 
-                              />
-                            )}
-                            {formatted.label}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p>Sin capacidades detectadas</p>
-                  )}
-                </div>
-
-
-                {/* Product Functions */}
-                {selectedDevice.productFuncs && selectedDevice.productFuncs.length > 0 && (
-                  <div className="device-modal-funcs">
-                    <h3>Funciones del Producto</h3>
-                    <div className="funcs-list">
-                      {selectedDevice.productFuncs.map((func) => (
-                        <div key={func.Id} className="func-item">
-                          <span className="func-name">{func.Name}</span>
-                          <span className="func-code">[{func.Code}]</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Documentation Links */}
-                <div className="device-modal-docs">
-                  <h3>📚 Documentación</h3>
-                  <div className="docs-links">
-                    {selectedDevice.techSheetUrl && (
-                      <button
-                        onClick={() => openPdfViewer(selectedDevice.techSheetUrl, `Ficha Técnica - ${selectedDevice.title}`)}
-                        className="doc-link tech-sheet"
-                      >
-                        📋 Ficha Técnica
-                      </button>
-                    )}
-                    {selectedDevice.qrcode && (
-                      <button
-                        onClick={() => openPdfViewer(selectedDevice.qrcode, `QR Code - ${selectedDevice.title}`, 'image')}
-                        className="doc-link qr-code"
-                      >
-                        📱 Ver QR Code
-                      </button>
-                    )}
-                  </div>
-                  <p className="docs-note">
-                    ℹ️ La documentación se carga desde el servidor del fabricante
-                  </p>
-                </div>
-
-                {/* AI Demo Button (if compatible) */}
-                {isAIReady(selectedDevice.id) && (
-                  <div className="device-modal-ai">
-                    <button className="ai-demo-btn" onClick={() => startAIDemo(selectedDevice)}>
-                      <span className="btn-icon">✨</span>
-                      Experiencia IA
-                    </button>
-                    <p className="ai-note">
-                      ✨ Este dispositivo es compatible con Velvet Sync AI Impulse
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeviceModal
+          selectedDevice={selectedDevice}
+          isAIReady={isAIReady}
+          isMobileDevice={isMobileDevice}
+          onClose={() => startTransition(() => setSelectedDevice(null))}
+          onStartAIDemo={startAIDemo}
+          onOpenNativeApp={handleOpenNativeApp}
+          onOpenPdfViewer={openPdfViewer}
+        />
       )}
 
-      {/* PDF Viewer Modal */}
       {showPdfViewer && (
-        <div className="pdf-viewer-overlay" onClick={closePdfViewer}>
-          <div className="pdf-viewer-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="pdf-viewer-close" onClick={closePdfViewer}>
-              &times;
-            </button>
-            <div className="pdf-viewer-header">
-              <h3>{pdfTitle}</h3>
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="pdf-download-btn"
-              >
-                ⬇️ Descargar
-              </a>
-            </div>
-            <div className="pdf-viewer-content">
-              {pdfType === 'image' ? (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  background: '#0A0A0A'
-                }}>
-                  <img
-                    src={pdfUrl}
-                    alt={pdfTitle}
-                    style={{
-                      maxWidth: '100%',
-                      maxHeight: '100%',
-                      objectFit: 'contain'
-                    }}
-                  />
-                </div>
-              ) : (
-                <iframe
-                  src={`https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
-                  title={pdfTitle}
-                  width="100%"
-                  height="100%"
-                  style={{ border: 'none' }}
-                />
-              )}
-            </div>
-          </div>
-        </div>
+        <PDFViewerModal
+          pdfUrl={pdfUrl}
+          pdfTitle={pdfTitle}
+          pdfType={pdfType}
+          onClose={closePdfViewer}
+        />
       )}
     </div>
   );

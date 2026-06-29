@@ -1,4 +1,4 @@
-const GITHUB_BASE = 'https://raw.githubusercontent.com/reneleyvaolace/velvetsynccatalog/main/documentacion/docs';
+import { GITHUB_BASE } from '../config/constants';
 
 export const getDeviceImage = (id) => `${GITHUB_BASE}/img/VS_${id}.jpg`
 export const getDeviceQR = (id) => `${GITHUB_BASE}/qr/QR_${id}.png`
