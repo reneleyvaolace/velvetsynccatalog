@@ -4,6 +4,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/reset-password.html",
+      "destination": "/reset-password.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
